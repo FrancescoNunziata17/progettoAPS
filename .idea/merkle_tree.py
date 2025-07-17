@@ -50,45 +50,33 @@ class MerkleTree:
         Genera una prova di inclusione (Merkle Proof) per un dato specifico.
         La prova è una lista di hash dei nodi "fratelli" lungo il percorso dalla foglia alla radice.
         """
-        # Normalizza e hasha l'elemento dati per trovare la foglia corrispondente
+        # Normalizza e calcola l'hash dell'elemento da verificare
         normalized_data_item = json.dumps(data_item, sort_keys=True) if isinstance(data_item, (dict, list)) else str(data_item)
         item_hash = hashlib.sha256(normalized_data_item.encode('utf-8')).hexdigest()
 
         try:
             leaf_index = self.leaves.index(item_hash)
         except ValueError:
-            return [] # L'elemento non è nelle foglie
+            # L'elemento non è contenuto nelle foglie
+            return []
 
         proof = []
-        current_hash = item_hash
         current_index = leaf_index
 
-        for level_idx in range(len(self.tree) - 1): # Itera sui livelli, escludendo la radice
-            level = self.tree[level_idx]
-            is_right_child = (current_index % 2 != 0) # Vero se il nodo corrente è un figlio destro
+        # Salta la radice (ultimo livello) perché non fa parte della prova
+        for level in self.tree[:-1]:
+            is_right_child = (current_index % 2 != 0)  # Nodo destro se indice è dispari
             sibling_index = current_index - 1 if is_right_child else current_index + 1
 
-            # Gestisce il caso di un numero dispari di nodi all'ultimo livello:
-            # il nodo fratello sarà lo stesso nodo corrente se è l'ultimo e non ha un partner.
-            # Questo è già gestito nella _build_tree replicando il nodo, quindi qui dobbiamo fare attenzione
-            # a non uscire dai limiti dell'array.
-            if sibling_index < len(level):
-                proof.append({"hash": level[sibling_index], "position": "left" if is_right_child else "right"})
-            else:
-                # Se non c'è un fratello (es. ultimo nodo in un livello dispari che è stato duplicato),
-                # la prova non includerà un fratello per questo livello.
-                # Questo scenario è più complesso da gestire deterministicamente in una prova standard
-                # e potrebbe richiedere un approccio diverso per alberi con numero di foglie non potenze di 2.
-                # Per questa implementazione semplificata, assumiamo che l'elemento duplicato non abbia un fratello.
-                pass
+            # Aggiungi il nodo fratello alla lista delle prove se esiste
+            if sibling_index < len(level):  # Verifica che `sibling_index` esista
+                proof.append({
+                    "hash": level[sibling_index],
+                    "position": "left" if is_right_child else "right"
+                })
 
-                # Calcola l'hash del genitore per il prossimo livello
-            if is_right_child:
-                current_hash = hashlib.sha256((level[sibling_index] + current_hash).encode('utf-8')).hexdigest()
-            else:
-                current_hash = hashlib.sha256((current_hash + level[sibling_index]).encode('utf-8')).hexdigest()
-
-            current_index = current_index // 2 # Spostati all'indice del genitore nel livello superiore
+            # Calcola l'indice del genitore per il livello successivo
+            current_index //= 2
 
         return proof
 
