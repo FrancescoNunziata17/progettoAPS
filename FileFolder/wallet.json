@@ -1,0 +1,44 @@
+{
+  "credentials": [
+    {
+      "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://example.org/credentials/v2"
+      ],
+      "id": "urn:vc:example:cred001",
+      "type": [
+        "VerifiableCredential",
+        "AcademicCredential"
+      ],
+      "issuer": {
+        "id": "did:example:universityofrennes"
+      },
+      "issuanceDate": "2025-07-17T13:08:38.957579",
+      "expirationDate": null,
+      "holder": {
+        "id": "did:example:studentS12345"
+      },
+      "credentialSubject": {
+        "studentId": "S12345",
+        "firstName": "Mario",
+        "lastName": "Rossi",
+        "dateOfBirth": "2000-01-15",
+        "courseName": "Algoritmi e Protocolli per la Sicurezza",
+        "grade": "30 cum laude",
+        "ectsCredits": 6,
+        "issueSemester": "2024-2025/1",
+        "courseCompleted": true,
+        "courseDescription": "Corso avanzato di sicurezza informatica."
+      },
+      "proof": {
+        "type": "DataIntegrityProof",
+        "signature": "2410e0597b4c97aa39323f586be9dce5d7d3c537a32e04bda3a369c072079cd15e8bf0f5a6738c687bfbd32528ff6c67b2af903d25b7f8d915584c4f54011898567cbe98ca1922b4deb8f1b20142a3148b2c4ebf850127bdea9f8d5b31210ff9a14de0517eba6da55f8327682f92bb736eaddf1d2c15bd69f0bddac620705e66c47bb3a123dbf9065789cf9631bfdda63f1be617f23a588deff0e6583e7385d6524ccb2be577c7cc4231822c19f60ca0cdc8bdfb434a8103bc8bc6f5b8332a8d7bb474d67ab640e05ff1730837a6f25c09568636d0eee4ddde32a31a45268fcd9c00fcf0e3307f7cacb8ad04449c5b7d331b1878497d2834a115ff4627d61649",
+        "merkleRootHash": "a816f6ae75c93a5ecf0868e4dcbdad456a9be8bcba82961c1ebd827823eb29a9",
+        "revocationMechanism": {
+          "type": "BlockchainRevocationList",
+          "reference": "urn:vc:example:cred001"
+        }
+      }
+    }
+  ]
+}

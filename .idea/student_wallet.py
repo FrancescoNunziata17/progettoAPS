@@ -1,12 +1,13 @@
 import json
 from credential import AcademicCredential
 from merkle_tree import MerkleTree # Necessario per generare le prove
+import os
 
 class StudentWallet:
     """
     Simula il wallet di uno studente per conservare e presentare credenziali.
     """
-    def __init__(self, student_id: str, storage_file: str = None):
+    def __init__(self, student_id: str, storage_file: str = "C:\\Users\\alexp\\IdeaProjects\\progettoAPS\\FileFolder\\wallet.json"):
         self.student_id = student_id
         # Potresti voler cifrare queste credenziali in un'applicazione reale
         self.credentials = {} # {'credential_id': AcademicCredential_object}

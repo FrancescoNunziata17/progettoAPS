@@ -1,3 +1,5 @@
+import json
+
 class BlockchainSimulator:
     """
     Simula un registro blockchain immutabile per la gestione delle revoche.
