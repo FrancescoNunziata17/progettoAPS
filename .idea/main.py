@@ -16,6 +16,8 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+import re
+
 from login_register import verify_password, hash_password
 current_email = "";
 current_id = ""
@@ -23,9 +25,48 @@ current_role = "s";
 
 # Funzioni di supporto per autenticazione
 def registra_utente():
-    email = input("Inserisci la tua email per registrarti: ")
-    hashed_password, salt_ex = hash_password(input("Crea una password sicura: "))
-    student_id = input("Inserisci la tua matricola studente: ")
+    while True:
+        email = input("Inserisci la tua email per registrarti: ")
+        pattern_email = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not re.match(pattern_email, email):
+            print("Formato email non valido. Riprova.")
+            continue
+        break
+
+    while True:
+        password = input("Crea una password sicura: ")
+        # Verifica lunghezza minima
+        if len(password) < 8:
+            print("La password deve essere lunga almeno 8 caratteri.")
+            continue
+        # Verifica presenza di almeno una maiuscola
+        if not re.search(r'[A-Z]', password):
+            print("La password deve contenere almeno una lettera maiuscola.")
+            continue
+        # Verifica presenza di almeno un numero
+        if not re.search(r'\d', password):
+            print("La password deve contenere almeno un numero.")
+            continue
+        # Verifica presenza di almeno un carattere speciale
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+            print("La password deve contenere almeno un carattere speciale.")
+            continue
+        break
+
+
+    hashed_password, salt_ex = hash_password(password)
+
+    while True:
+        student_id = input("Inserisci la tua matricola studente: ")
+        # Verifica che sia solo numerico e abbia almeno 3 caratteri
+        if not student_id.isdigit():
+            print("La matricola deve contenere solo numeri.")
+            continue
+        if len(student_id) < 3:
+            print("La matricola deve contenere almeno 3 caratteri.")
+            continue
+        break
+
     role = "s"
     
     with open("users.json", "a") as file:
