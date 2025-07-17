@@ -1,13 +1,18 @@
-
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
+import hashlib
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization
+from cryptography.exceptions import InvalidSignature
 
 # Importa i tuoi moduli
 from credential import AcademicCredential, generate_key_pair, save_private_key, load_private_key, save_public_key, load_public_key
 from merkle_tree import MerkleTree
 from blockchain_simulator import BlockchainSimulator
 from student_wallet import StudentWallet
+from cryptography.exceptions import InvalidSignature
 
 # --- Configurazione e Inizializzazione ---
 print("--- Inizializzazione Sistema ---")
@@ -101,17 +106,49 @@ print("\n--- Fase 3: Verifica Credenziale (Università di Salerno) ---")
 # L'università ricevente usa la chiave pubblica dell'emittente per la verifica
 
 def verify_full_presentation(presentation: dict, public_key_issuer, blockchain_reg) -> bool:
-    """Funzione ausiliaria per la verifica completa della presentazione."""
+    """Funzione modificata per verificare una presentazione selettiva."""
     print("  - Verificando firma digitale...")
-    # Crea un oggetto AcademicCredential temporaneo dalla presentazione per la verifica della firma
-    temp_cred = AcademicCredential.from_json(json.dumps(presentation))
-    is_signature_valid = temp_cred.verify_signature(public_key_issuer)
-    print(f"  Firma digitale: {'Valida' if is_signature_valid else 'NON VALIDA'}")
 
+    # Verifica della firma digitale utilizzando i dati nella proof
+    try:
+        signature = bytes.fromhex(presentation["proof"]["signature"])
+        merkle_root_hash = presentation["proof"]["merkleRootHash"]
+        revocation_reference = presentation["proof"]["revocationMechanism"]["reference"]
+
+        # Prepara l'hash da verificare, utilizzando i dati della presentazione
+        data_to_verify = {
+            "id": presentation["id"],
+            "issuer_id": presentation["issuer"]["id"],
+            "holder_id": presentation["holder"]["id"],
+            "issuanceDate": presentation["issuanceDate"],
+            "merkleRootHash": merkle_root_hash,
+            "revocationReference": revocation_reference,
+        }
+        json_data_to_verify = json.dumps(data_to_verify, sort_keys=True).encode('utf-8')
+        hash_to_verify = hashlib.sha256(json_data_to_verify).digest()
+
+        # Verifica la firma utilizzando la chiave pubblica dell'emittente
+        public_key_issuer.verify(
+            signature,
+            hash_to_verify,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),
+        )
+        print("  Firma digitale: Valida")
+        is_signature_valid = True
+    except InvalidSignature:
+        print("  Firma digitale: NON VALIDA")
+        is_signature_valid = False
+    except Exception as e:
+        print(f"Errore durante la verifica della firma: {e}")
+        is_signature_valid = False
+
+    # Verifica delle prove Merkle
     print("  - Verificando prove Merkle...")
     all_merkle_proofs_valid = True
-    merkle_root_hash_from_proof = presentation["proof"]["merkleRootHash"]
-
     for attr, value in presentation["disclosedClaims"].items():
         proof = presentation["merkleProofs"].get(attr)
         if not proof:
@@ -119,21 +156,24 @@ def verify_full_presentation(presentation: dict, public_key_issuer, blockchain_r
             all_merkle_proofs_valid = False
             continue
 
-        # Prepara l'elemento dati esatto come è stato usato nel Merkle Tree per la verifica
+        # Prepara il dato esatto per la verifica (coerente con la costruzione Merkle Tree)
         data_item_for_verification = json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
         full_data_item_string_for_verification = f"{attr}:{data_item_for_verification}"
 
-        is_proof_valid = MerkleTree.verify_proof(full_data_item_string_for_verification, proof, merkle_root_hash_from_proof)
+        is_proof_valid = MerkleTree.verify_proof(full_data_item_string_for_verification, proof, merkle_root_hash)
         print(f"    Prova Merkle per '{attr}': {'Valida' if is_proof_valid else 'NON VALIDA'}")
         if not is_proof_valid:
             all_merkle_proofs_valid = False
+
     print(f"  Tutte le prove Merkle: {'Valide' if all_merkle_proofs_valid else 'NON VALIDE'}")
 
+    # Verifica dello stato di revoca
     print("  - Controllando stato di revoca...")
     cred_reference_for_revocation = presentation["proof"]["revocationMechanism"]["reference"]
     is_cred_revoked = blockchain_reg.is_revoked(cred_reference_for_revocation)
     print(f"  Stato di revoca: {'Revocata' if is_cred_revoked else 'Non Revocata'}")
 
+    # Restituisce il risultato complessivo
     return is_signature_valid and all_merkle_proofs_valid and not is_cred_revoked
 
 start_time = time.perf_counter()
