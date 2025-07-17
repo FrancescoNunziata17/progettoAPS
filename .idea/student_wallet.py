@@ -7,12 +7,14 @@ class StudentWallet:
     """
     Simula il wallet di uno studente per conservare e presentare credenziali.
     """
-    def __init__(self, student_id: str, storage_file: str = "C:\\Users\\alexp\\IdeaProjects\\progettoAPS\\FileFolder\\wallet.json"):
+    def __init__(self, student_id: str, storage_file: str = "FileFolder\\Unisa_credential.json", wallet_file: str = "FileFolder\\student_wallet.json"):
         self.student_id = student_id
         # Potresti voler cifrare queste credenziali in un'applicazione reale
         self.credentials = {} # {'credential_id': AcademicCredential_object}
-        self.storage_file = storage_file if storage_file else f"wallet_{student_id}.json"
+        self.storage_file = storage_file
+        self.wallet_file = wallet_file
         self._load_credentials()
+        self._save_credentials()
 
     def _load_credentials(self):
         """Carica le credenziali dal file di storage."""
@@ -31,7 +33,7 @@ class StudentWallet:
 
     def _save_credentials(self):
         """Salva le credenziali nel file di storage."""
-        with open(self.storage_file, 'w') as f:
+        with open(self.wallet_file, 'w') as f:
             json.dump({"credentials": [cred.to_dict() for cred in self.credentials.values()]}, f, indent=2)
 
     def add_credential(self, credential: AcademicCredential):
@@ -45,6 +47,19 @@ class StudentWallet:
     def get_credential(self, credential_id: str) -> AcademicCredential:
         """Recupera una credenziale dal wallet."""
         return self.credentials.get(credential_id)
+
+    def print_credentials(self):
+        """Visualizza tutte le credenziali presenti nel wallet dello studente."""
+        print("\n--- Elenco delle Credenziali nel Wallet ---")
+        tutte_le_credenziali = self.credentials  # Recupera tutte le credenziali dal wallet
+
+        if not tutte_le_credenziali:
+            print("Il wallet è vuoto. Nessuna credenziale disponibile.")
+            return
+
+        for idx, credenziale in enumerate(tutte_le_credenziali, start=1):
+            print(f"\nCredenziale #{idx}:")
+            print(credenziale)
 
     def generate_selective_presentation(self, credential_id: str, attributes_to_reveal: list) -> dict:
         """
