@@ -59,7 +59,7 @@ def registra_utente():
         except ValueError:
             print("Formato data non valido. Usa il formato YYYY-MM-DD.")
             continue
-
+            
     # Validazione password
     while True:
         password = input("Crea una password sicura: ")
