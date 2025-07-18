@@ -4,21 +4,46 @@ from cryptography.fernet import Fernet
 import base64
 import time
 import json
+import os
 
 class KDC:
+    _instance = None
+    _initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(KDC, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self):
-        # Chiave privata del KDC per firmare i ticket
-        self.private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048
-        )
-        self.public_key = self.private_key.public_key()
+        if not KDC._initialized:
+            # Verifica se esiste già una chiave salvata
+            try:
+                with open('kdc_private.pem', 'rb') as f:
+                    private_key_data = f.read()
+                    self.private_key = serialization.load_pem_private_key(
+                        private_key_data,
+                        password=None  # In produzione, usa una password!
+                    )
+            except FileNotFoundError:
+                # Genera nuova chiave se non esiste
+                self.private_key = rsa.generate_private_key(
+                    public_exponent=65537,
+                    key_size=2048
+                )
+                # Salva la chiave
+                with open('kdc_private.pem', 'wb') as f:
+                    f.write(self.private_key.private_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PrivateFormat.PKCS8,
+                        encryption_algorithm=serialization.NoEncryption()
+                    ))
 
-        # Dizionario per memorizzare le chiavi pubbliche degli utenti
-        self.user_public_keys = {}
+            self.public_key = self.private_key.public_key()
+            self.user_public_keys = {}
+            self.session_keys = {}
+            KDC._initialized = True
 
-        # Dizionario per le chiavi di sessione
-        self.session_keys = {}
 
     def register_user(self, user_id, user_public_key):
         """Registra la chiave pubblica di un utente"""
@@ -35,7 +60,8 @@ class KDC:
         # Genera chiave di sessione
         session_key = Fernet.generate_key()
 
-        # Crea il ticket per il server
+        # Crea il ticket per il server, è come un lasciapassare digitale temporanteo.
+        #contiene chi sei, dove vuoi andare, chiave per comunicare, quando è stato emesso, per quanto tempo è valido
         ticket = {
             'client_id': client_id,
             'server_id': server_id,
@@ -44,7 +70,7 @@ class KDC:
             'lifetime': 3600  # validità 1 ora
         }
 
-        # Firma il ticket con la chiave privata del KDC
+        # Firma il ticket con la chiave privata del KDC per garantire autenticità
         ticket_signature = self.private_key.sign(
             json.dumps(ticket).encode(),
             padding.PSS(
@@ -101,6 +127,9 @@ class KDC:
             print(f"Errore nella verifica del ticket: {e}")
             return False
 
+#- Rappresenta l'utente che vuole accedere a un servizio
+#- Gestisce le sue chiavi private e pubbliche
+#- Richiede e usa i ticket
 class Client:
     def __init__(self, client_id):
         self.client_id = client_id
@@ -131,6 +160,9 @@ class Client:
 
         return session_key, response['ticket']
 
+#- Rappresenta il servizio a cui il client vuole accedere
+#- Verifica i ticket
+#- Gestisce le sessioni attive
 class Server:
     def __init__(self, server_id):
         self.server_id = server_id
