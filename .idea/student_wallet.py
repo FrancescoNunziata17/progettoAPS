@@ -2,6 +2,7 @@ import json
 from credential import AcademicCredential
 from merkle_tree import MerkleTree # Necessario per generare le prove
 import os
+from cryptography.fernet import Fernet
 
 class StudentWallet:
     """
@@ -16,25 +17,46 @@ class StudentWallet:
         self._load_credentials()
         self._save_credentials()
 
+    def encrypt_data(data, key):
+        fernet = Fernet(key)
+        if isinstance(data, dict):
+            data = json.dumps(data)  # Converte i dati in una stringa JSON
+        return fernet.encrypt(data.encode())
+
+    def decrypt_data(encrypted_data, key):
+        fernet = Fernet(key)
+        decrypted_data = fernet.decrypt(encrypted_data).decode()
+        return json.loads(decrypted_data)  # Riconverte in un dizionario, se necessario
+
+    # Carica la chiave dal file protetto
+    def load_encryption_key():
+        with open("encryption_key.key", "rb") as key_file:
+            return key_file.read()
+
     def _load_credentials(self):
-        """Carica le credenziali dal file di storage."""
+        """Carica le credenziali cifrate dal file di storage."""
+        key = load_encryption_key()
         try:
-            with open(self.storage_file, 'r') as f:
-                data = json.load(f)
+            with open(self.storage_file, "rb") as f:  # Usa modalità binaria
+                encrypted_data = f.read()
+                data = decrypt_data(encrypted_data, key)
                 for cred_json in data.get("credentials", []):
                     cred = AcademicCredential.from_json(json.dumps(cred_json))
-                    if cred.holder["id"] == self.student_id: # Assicurati che la credenziale sia per questo studente
+                    if cred.holder["id"] == self.student_id:  # Assicurati che la credenziale sia per questo studente
                         self.credentials[cred.id] = cred
         except FileNotFoundError:
-            pass # Il wallet è vuoto inizialmente
-        except json.JSONDecodeError:
-            print(f"Attenzione: Errore di decodifica JSON nel file del wallet {self.storage_file}.")
+            pass  # Il wallet è vuoto inizialmente
+        except Exception as e:
+            print(f"Errore durante il caricamento delle credenziali cifrate: {e}")
             self.credentials = {}
 
     def _save_credentials(self):
-        """Salva le credenziali nel file di storage."""
-        with open(self.wallet_file, 'w') as f:
-            json.dump({"credentials": [cred.to_dict() for cred in self.credentials.values()]}, f, indent=2)
+        """Salva le credenziali cifrate nel file di storage."""
+        key = load_encryption_key()
+        credentials_data = {"credentials": [cred.to_dict() for cred in self.credentials.values()]}
+        encrypted_data = encrypt_data(credentials_data, key)
+        with open(self.wallet_file, "wb") as f:  # Usa modalità binaria per dati cifrati
+            f.write(encrypted_data)
 
     def add_credential(self, credential: AcademicCredential):
         """Aggiunge una nuova credenziale al wallet."""
