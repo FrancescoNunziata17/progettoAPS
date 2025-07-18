@@ -401,6 +401,7 @@ while True:
             issuance_date=datetime.now().isoformat()
         )
 
+
         issued_credential.sign(client.private_key, revocation_reference)
         
         # Registra nella blockchain
