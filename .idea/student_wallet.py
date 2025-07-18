@@ -5,129 +5,137 @@ import os
 from cryptography.fernet import Fernet
 
 class StudentWallet:
-    """
-    Simula il wallet di uno studente per conservare e presentare credenziali.
-    """
-    def __init__(self, student_id: str, storage_file: str = "FileFolder\\Unisa_credential.json", wallet_file: str = "FileFolder\\student_wallet.json"):
+    def __init__(self, student_id):
         self.student_id = student_id
-        # Potresti voler cifrare queste credenziali in un'applicazione reale
-        self.credentials = {} # {'credential_id': AcademicCredential_object}
-        self.storage_file = storage_file
-        self.wallet_file = wallet_file
-        self._load_credentials()
-        self._save_credentials()
+        self.credentials = {}  # ID -> Credenziale
+        self.personal_data = None  # Per i dati personali decifrati
+        self.client = None  # Client per KDC, inizializzato durante il recupero dati
 
-    def encrypt_data(data, key):
-        fernet = Fernet(key)
-        if isinstance(data, dict):
-            data = json.dumps(data)  # Converte i dati in una stringa JSON
-        return fernet.encrypt(data.encode())
-
-    def decrypt_data(encrypted_data, key):
-        fernet = Fernet(key)
-        decrypted_data = fernet.decrypt(encrypted_data).decode()
-        return json.loads(decrypted_data)  # Riconverte in un dizionario, se necessario
-
-    # Carica la chiave dal file protetto
-    def load_encryption_key():
-        with open("encryption_key.key", "rb") as key_file:
-            return key_file.read()
-
-    def _load_credentials(self):
-        """Carica le credenziali cifrate dal file di storage."""
-        key = load_encryption_key()
+    def initialize_kdc_client(self, email, password_hash):
+        """Inizializza il client KDC con le credenziali dell'utente"""
         try:
-            with open(self.storage_file, "rb") as f:  # Usa modalità binaria
-                encrypted_data = f.read()
-                data = decrypt_data(encrypted_data, key)
-                for cred_json in data.get("credentials", []):
-                    cred = AcademicCredential.from_json(json.dumps(cred_json))
-                    if cred.holder["id"] == self.student_id:  # Assicurati che la credenziale sia per questo studente
-                        self.credentials[cred.id] = cred
-        except FileNotFoundError:
-            pass  # Il wallet è vuoto inizialmente
+            self.client = Client(email)
+            # Carica la chiave privata del client
+            with open(f"keys/{email}_private.pem", "rb") as f:
+                private_key_data = f.read()
+                self.client.private_key = serialization.load_pem_private_key(
+                    private_key_data,
+                    password=password_hash.encode()  # Usa l'hash della password
+                )
+            self.client.public_key = self.client.private_key.public_key()
+            return True
         except Exception as e:
-            print(f"Errore durante il caricamento delle credenziali cifrate: {e}")
-            self.credentials = {}
+            print(f"Errore nell'inizializzazione del client KDC: {str(e)}")
+            return False
 
-    def _save_credentials(self):
-        """Salva le credenziali cifrate nel file di storage."""
-        key = load_encryption_key()
-        credentials_data = {"credentials": [cred.to_dict() for cred in self.credentials.values()]}
-        encrypted_data = encrypt_data(credentials_data, key)
-        with open(self.wallet_file, "wb") as f:  # Usa modalità binaria per dati cifrati
-            f.write(encrypted_data)
+    def fetch_encrypted_data(self, email, password_hash):
+        """Recupera e decifra i dati personali e le credenziali usando KDC"""
+        if not self.initialize_kdc_client(email, password_hash):
+            return False
 
-    def add_credential(self, credential: AcademicCredential):
-        """Aggiunge una nuova credenziale al wallet."""
-        if credential.holder["id"] != self.student_id:
-            raise ValueError("La credenziale non è destinata a questo studente.")
+        try:
+            # Ottieni istanza KDC
+            kdc = KDC()
+
+            # Registra il client
+            kdc.register_user(email, self.client.public_key)
+
+            # Richiedi una sessione
+            server_id = "data_retrieval_server"
+            session_key, ticket = self.client.request_service(kdc, server_id)
+
+            # Verifica il ticket con un server
+            data_server = Server(server_id)
+            success, server_session_key = data_server.handle_client_request(
+                kdc,
+                ticket['data'],
+                ticket['signature']
+            )
+
+            if not success:
+                raise ValueError("Errore nella verifica del ticket")
+
+            # Usa Fernet per decifrare i dati
+            f = Fernet(session_key)
+
+            # Recupera i dati cifrati e le credenziali
+            with open("users.json", "r") as file:
+                for line in file:
+                    user = json.loads(line)
+                    if user["email"] == email:
+                        # Decifra i dati personali
+                        self.personal_data = {
+                            "nome": f.decrypt(base64.b64decode(user["nome"]["encrypted_data"])).decode(),
+                            "cognome": f.decrypt(base64.b64decode(user["cognome"]["encrypted_data"])).decode(),
+                            "data_nascita": f.decrypt(base64.b64decode(user["data_nascita"]["encrypted_data"])).decode(),
+                            "matricola": f.decrypt(base64.b64decode(user["student_id"]["encrypted_data"])).decode()
+                        }
+
+                        # Recupera e decifra le credenziali accademiche
+                        if "academic_credentials" in user:
+                            for encrypted_cred in user["academic_credentials"]:
+                                decrypted_cred_data = f.decrypt(base64.b64decode(encrypted_cred["encrypted_data"])).decode()
+                                cred_data = json.loads(decrypted_cred_data)
+
+                                # Crea l'oggetto AcademicCredential
+                                credential = AcademicCredential(
+                                    id=cred_data["id"],
+                                    issuer_id=cred_data["issuer_id"],
+                                    holder_id=self.student_id,
+                                    credential_subject={
+                                        "studentId": cred_data["studentId"],
+                                        "firstName": cred_data["firstName"],
+                                        "lastName": cred_data["lastName"],
+                                        "dateOfBirth": cred_data["dateOfBirth"],
+                                        "courseName": cred_data["courseName"],
+                                        "grade": cred_data["grade"],
+                                        "ectsCredits": cred_data["ectsCredits"],
+                                        "issueSemester": cred_data["issueSemester"],
+                                        "courseCompleted": cred_data["courseCompleted"],
+                                        "courseDescription": cred_data["courseDescription"]
+                                    },
+                                    issuance_date=cred_data["issuance_date"]
+                                )
+
+                                # Aggiungi la credenziale al wallet
+                                self.credentials[credential.id] = credential
+
+                                # Salva le credenziali nel file del wallet
+                                self._save_credentials()
+
+                        return True
+
+            return False
+
+        except Exception as e:
+            print(f"Errore nel recupero dei dati: {str(e)}")
+            return False
+
+    def add_credential(self, credential):
+        """Aggiunge una credenziale al wallet"""
         self.credentials[credential.id] = credential
-        self._save_credentials()
-        print(f"Credenziale '{credential.id}' aggiunta al wallet di {self.student_id}.")
-
-    def get_credential(self, credential_id: str) -> AcademicCredential:
-        """Recupera una credenziale dal wallet."""
-        return self.credentials.get(credential_id)
 
     def print_credentials(self):
-        """Visualizza tutte le credenziali presenti nel wallet dello studente."""
-        print("\n--- Elenco delle Credenziali nel Wallet ---")
-        tutte_le_credenziali = self.credentials  # Recupera tutte le credenziali dal wallet
+        """Mostra tutte le credenziali nel wallet"""
+        if self.personal_data:
+            print("\nDati Personali:")
+            print(f"Nome: {self.personal_data['nome']}")
+            print(f"Cognome: {self.personal_data['cognome']}")
+            print(f"Data di Nascita: {self.personal_data['data_nascita']}")
+            print(f"Matricola: {self.personal_data['matricola']}")
 
-        if not tutte_le_credenziali:
-            print("Il wallet è vuoto. Nessuna credenziale disponibile.")
+        print("\nCredenziali Accademiche:")
+        if not self.credentials:
+            print("Nessuna credenziale presente nel wallet.")
             return
 
-        for idx, credenziale in enumerate(tutte_le_credenziali, start=1):
-            print(f"\nCredenziale #{idx}:")
-            print(credenziale)
+        for cred_id, credential in self.credentials.items():
+            print(f"\nID Credenziale: {cred_id}")
+            print(json.dumps(credential.credential_subject, indent=2))
 
-    def generate_selective_presentation(self, credential_id: str, attributes_to_reveal: list) -> dict:
-        """
-        Genera una presentazione selettiva per una credenziale specificata,
-        rivelando solo gli attributi richiesti.
-        """
-        cred = self.get_credential(credential_id)
-        if not cred:
-            raise ValueError(f"Credenziale con ID '{credential_id}' non trovata nel wallet.")
-        if not cred.proof or "merkleRootHash" not in cred.proof:
-            raise ValueError("La credenziale non ha un Merkle Root Hash valido per la presentazione selettiva.")
+    def generate_selective_presentation(self, credential_id, attributes_to_reveal):
+        """Genera una presentazione selettiva di una credenziale"""
+        if credential_id not in self.credentials:
+            raise ValueError(f"Credenziale {credential_id} non trovata nel wallet")
 
-        selective_presentation = {
-            "id": cred.id,
-            "issuer": cred.issuer,
-            "holder": cred.holder,
-            "issuanceDate": cred.issuanceDate,
-            "proof": {
-                "type": cred.proof["type"],
-                "signature": cred.proof["signature"],
-                "merkleRootHash": cred.proof["merkleRootHash"],
-                "revocationMechanism": cred.proof["revocationMechanism"]
-            },
-            "disclosedClaims": {},
-            "merkleProofs": {}
-        }
-
-        # Per generare le prove, ricreiamo il MerkleTree dal subject completo della credenziale
-        full_subject_data_items = cred.get_subject_data_for_merkle_tree()
-        merkle_tree_for_proof = MerkleTree(full_subject_data_items)
-
-        for attr in attributes_to_reveal:
-            if attr in cred.credentialSubject:
-                value = cred.credentialSubject[attr]
-                selective_presentation["disclosedClaims"][attr] = value
-
-                # Prepara l'elemento dati esatto come viene usato nel Merkle Tree
-                data_item_for_proof = json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
-                full_data_item_string = f"{attr}:{data_item_for_proof}"
-
-                proof = merkle_tree_for_proof.generate_proof(full_data_item_string)
-                if proof:
-                    selective_presentation["merkleProofs"][attr] = proof
-                else:
-                    print(f"Attenzione: Impossibile generare prova per '{attr}'. Controlla la logica del Merkle Tree.")
-            else:
-                print(f"Attenzione: L'attributo '{attr}' non trovato nel credentialSubject.")
-
-        return selective_presentation
+        return self.credentials[credential_id].generate_presentation(attributes_to_reveal)

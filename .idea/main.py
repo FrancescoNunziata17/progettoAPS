@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 import re
+from KDC import KDC, Client, Server
 
 from login_register import verify_password, hash_password
 current_email = "";
@@ -25,15 +26,9 @@ current_role = "s";
 
 # Funzioni di supporto per autenticazione
 def registra_utente():
-    # Validazione email
-    while True:
-        email = input("Inserisci la tua email per registrarti: ")
-        pattern_email = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-        if not re.match(pattern_email, email):
-            print("Formato email non valido. Riprova.")
-            continue
-        break
-    
+    kdc = KDC()  # Ottiene l'istanza unica del KDC
+
+    # [Tutto il codice di validazione rimane invariato]
     # Validazione nome
     while True:
         nome = input("Inserisci il tuo nome: ")
@@ -41,7 +36,7 @@ def registra_utente():
             print("Il nome deve contenere almeno 2 caratteri e solo lettere.")
             continue
         break
-    
+
     # Validazione cognome
     while True:
         cognome = input("Inserisci il tuo cognome: ")
@@ -49,7 +44,7 @@ def registra_utente():
             print("Il cognome deve contenere almeno 2 caratteri e solo lettere.")
             continue
         break
-    
+
     # Validazione data di nascita
     while True:
         data_nascita = input("Inserisci la tua data di nascita (formato: YYYY-MM-DD): ")
@@ -59,8 +54,32 @@ def registra_utente():
         except ValueError:
             print("Formato data non valido. Usa il formato YYYY-MM-DD.")
             continue
-            
-    # Validazione password
+
+
+    # Dopo le validazioni, creiamo un nuovo Client per l'utente
+    while True:
+        email = input("Inserisci la tua email per registrarti: ")
+        pattern_email = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not re.match(pattern_email, email):
+            print("Formato email non valido. Riprova.")
+            continue
+        break
+    client = Client(email)  # email come client_id
+
+    # Registriamo la chiave pubblica del client nel KDC
+    kdc.register_user(email, client.public_key)
+
+    # Validazione matricola
+    while True:
+        student_id = input("Inserisci la tua matricola studente: ")
+        if not student_id.isdigit():
+            print("La matricola deve contenere solo numeri.")
+            continue
+        if len(student_id) < 3:
+            print("La matricola deve contenere almeno 3 caratteri.")
+            continue
+        break
+    # Hash della password
     while True:
         password = input("Crea una password sicura: ")
         if len(password) < 8:
@@ -76,49 +95,77 @@ def registra_utente():
             print("La password deve contenere almeno un carattere speciale.")
             continue
         break
-
-    # Validazione matricola
-    while True:
-        student_id = input("Inserisci la tua matricola studente: ")
-        if not student_id.isdigit():
-            print("La matricola deve contenere solo numeri.")
-            continue
-        if len(student_id) < 3:
-            print("La matricola deve contenere almeno 3 caratteri.")
-            continue
-        break
-
-    # Hash di tutti i dati sensibili
     hashed_password, salt_ex = hash_password(password)
-    hashed_email = hashlib.sha256(email.encode()).hexdigest()
-    hashed_matricola = hashlib.sha256(student_id.encode()).hexdigest()
-    hashed_nome = hashlib.sha256(nome.encode()).hexdigest()
-    hashed_cognome = hashlib.sha256(cognome.encode()).hexdigest()
-    hashed_data_nascita = hashlib.sha256(data_nascita.encode()).hexdigest()
 
-    role = "s"
-    
+    # Richiediamo un ticket al KDC per cifrare i dati
+    server_id = "registration_server"
+    session_key, ticket = client.request_service(kdc, server_id)
+
+    # Creiamo un oggetto Fernet con la chiave di sessione per cifrare i dati
+    f = Fernet(session_key)
+
+    # Cifriamo i dati sensibili con la chiave di sessione
+    encrypted_nome = f.encrypt(nome.encode())
+    encrypted_cognome = f.encrypt(cognome.encode())
+    encrypted_data_nascita = f.encrypt(data_nascita.encode())
+    encrypted_matricola = f.encrypt(student_id.encode())
+
     # Salvataggio nel file users.json
     with open("users.json", "a") as file:
         user = {
-            "email": hashed_email,
-            "password": hashed_password,
-            "student_id": hashed_matricola,
-            "nome": hashed_nome,
-            "cognome": hashed_cognome,
-            "data_nascita": hashed_data_nascita,
+            "email": email,  # email è l'identificativo pubblico
+            "password": hashed_password,  # password rimane hashata
+            "student_id": {
+                "encrypted_data": encrypted_matricola.decode(),
+                "ticket": ticket  # includiamo il ticket per verifica
+            },
+            "nome": {
+                "encrypted_data": encrypted_nome.decode(),
+                "ticket": ticket
+            },
+            "cognome": {
+                "encrypted_data": encrypted_cognome.decode(),
+                "ticket": ticket
+            },
+            "data_nascita": {
+                "encrypted_data": encrypted_data_nascita.decode(),
+                "ticket": ticket
+            },
             "salt_ex": salt_ex,
-            "role": role
+            "role": "s",
+            "public_key": client.public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            ).decode()
         }
         file.write(json.dumps(user) + "\n")
 
-    global current_email
-    global current_role
-    global current_id
+    # Salviamo la chiave privata del client
+    os.makedirs('keys', exist_ok=True)
+    with open(f"keys/{email}_private.pem", "wb") as f:
+        f.write(client.private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.BestAvailableEncryption(password.encode())
+        ))
+
+    # Server verifica il ticket
+    registration_server = Server(server_id)
+    success, _ = registration_server.handle_client_request(
+        kdc,
+        ticket['data'],
+        ticket['signature']
+    )
+
+    if not success:
+        raise ValueError("Errore nella verifica del ticket")
+
+    global current_email, current_role, current_id
     current_email = email
-    current_role = role
+    current_role = "s"
     current_id = student_id
     print("Registrazione completata! Ora sei connesso come:", email)
+
 
 def accedi_utente():
     while True:
@@ -265,7 +312,35 @@ while True:
             "courseDescription": description
         }
 
+        # Ottieni istanza KDC e crea una sessione per cifrare i dati
+        kdc = KDC()
+        server_id = "credential_server"
+        session_key, ticket = client.request_service(kdc, server_id)
+        f = Fernet(session_key)
 
+        # Cifra i dati della credenziale
+        encrypted_credential = f.encrypt(json.dumps(credential_subject_data).encode())
+
+        # Aggiorna il file users.json con la nuova credenziale cifrata
+        with open("users.json", "r+") as file:
+            users = [json.loads(line) for line in file]
+            for user in users:
+                if user["student_id"]["encrypted_data"] == student_id:  # Trova lo studente corretto
+                    if "academic_credentials" not in user:
+                        user["academic_credentials"] = []
+                    user["academic_credentials"].append({
+                        "encrypted_data": base64.b64encode(encrypted_credential).decode(),
+                        "ticket": ticket
+                    })
+                    break
+            
+            # Riscrivi il file con i dati aggiornati
+            file.seek(0)
+            for user in users:
+                file.write(json.dumps(user) + "\n")
+            file.truncate()
+
+        # Crea e firma la credenziale
         issued_credential = AcademicCredential(
             id=credential_id,
             issuer_id="did:example:universityofrennes",
@@ -274,10 +349,12 @@ while True:
             issuance_date=datetime.now().isoformat()
         )
         issued_credential.sign(issuer_private_key, revocation_reference)
-        student_wallet.add_credential(issued_credential)
+        
+        # Registra nella blockchain
         if not blockchain_register.is_revoked(revocation_reference):
             blockchain_register.revoked_credentials.add(revocation_reference)
             blockchain_register._save_to_file()
+        
         print("Credenziale emessa con successo e registrata sulla blockchain.")
 
     elif current_role == "u" and scelta == "2":
