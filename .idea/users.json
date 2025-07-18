@@ -8,3 +8,7 @@
 {"email": "ciao", "password": "fShX5tqbfz6lH1ZCsD1I_ON0rszYm8r41kS64iq7JgM=", "student_id": "9", "salt_ex": "7b6534e629a66ad93abf1a397f83b606", "role": "s"}
 {"email": "posto@ciao.it", "password": "lbQ2uWl-jq5eqlV53j2ms7kPv3zXB-irF56kk20KGSw=", "student_id": "123", "salt_ex": "c7499b54b3dc4b69931315874bc80012", "role": "s"}
 {"email": "ciao@ciao.ciao", "password": "fgy3Jbsf_RdTvpM1MunkuNK_6FlB7TLK3ULqztYxS7E=", "student_id": "123", "salt_ex": "20bd579c7f7cfb71323b4ecbcc8802d6", "role": "s"}
+{"email": "ciao", "password": "fShX5tqbfz6lH1ZCsD1I_ON0rszYm8r41kS64iq7JgM=", "student_id": "9", "salt_ex": "7b6534e629a66ad93abf1a397f83b606", "role": "s"}
+{"email": "posto@ciao.it", "password": "lbQ2uWl-jq5eqlV53j2ms7kPv3zXB-irF56kk20KGSw=", "student_id": "123", "salt_ex": "c7499b54b3dc4b69931315874bc80012", "role": "s"}
+{"email": "ciao@ciao.ciao", "password": "fgy3Jbsf_RdTvpM1MunkuNK_6FlB7TLK3ULqztYxS7E=", "student_id": "123", "salt_ex": "20bd579c7f7cfb71323b4ecbcc8802d6", "role": "s"}
+{"email": "cd87a2b212e7bc0b6192284c6fc344e34e5f74ffacd21ad0758f6bef2f77d8b6", "password": "WeDlyclINpkcwyYevAJj80ZbPtqf-XN4N1rYal2nbxo=", "student_id": "da70dfa4d9f95ac979f921e8e623358236313f334afcd06cddf8a5621cf6a1e9", "nome": "becc2c3e151607c7a97b421a799b2559f6b9aa58beac047db994b92a1dd03229", "cognome": "e4b6e66c3e338e97fc222a488fd59e1744cd8c5e255dc413abdc1caebaec815c", "data_nascita": "cfc293745bae2a319fe72732ee1d9bd236c00db1537d6f5ab35868c819c717ef", "salt_ex": "3ce3115fc69a1416798bfcd14beaa603", "role": "s"}

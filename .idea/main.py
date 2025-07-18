@@ -25,6 +25,7 @@ current_role = "s";
 
 # Funzioni di supporto per autenticazione
 def registra_utente():
+    # Validazione email
     while True:
         email = input("Inserisci la tua email per registrarti: ")
         pattern_email = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
@@ -32,34 +33,53 @@ def registra_utente():
             print("Formato email non valido. Riprova.")
             continue
         break
-
-
+    
+    # Validazione nome
+    while True:
+        nome = input("Inserisci il tuo nome: ")
+        if len(nome) < 2 or not nome.replace(" ", "").isalpha():
+            print("Il nome deve contenere almeno 2 caratteri e solo lettere.")
+            continue
+        break
+    
+    # Validazione cognome
+    while True:
+        cognome = input("Inserisci il tuo cognome: ")
+        if len(cognome) < 2 or not cognome.replace(" ", "").isalpha():
+            print("Il cognome deve contenere almeno 2 caratteri e solo lettere.")
+            continue
+        break
+    
+    # Validazione data di nascita
+    while True:
+        data_nascita = input("Inserisci la tua data di nascita (formato: YYYY-MM-DD): ")
+        try:
+            datetime.strptime(data_nascita, '%Y-%m-%d')
+            break
+        except ValueError:
+            print("Formato data non valido. Usa il formato YYYY-MM-DD.")
+            continue
+            
+    # Validazione password
     while True:
         password = input("Crea una password sicura: ")
-        # Verifica lunghezza minima
         if len(password) < 8:
             print("La password deve essere lunga almeno 8 caratteri.")
             continue
-        # Verifica presenza di almeno una maiuscola
         if not re.search(r'[A-Z]', password):
             print("La password deve contenere almeno una lettera maiuscola.")
             continue
-        # Verifica presenza di almeno un numero
         if not re.search(r'\d', password):
             print("La password deve contenere almeno un numero.")
             continue
-        # Verifica presenza di almeno un carattere speciale
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
             print("La password deve contenere almeno un carattere speciale.")
             continue
         break
 
-
-    hashed_password, salt_ex = hash_password(password)
-
+    # Validazione matricola
     while True:
         student_id = input("Inserisci la tua matricola studente: ")
-        # Verifica che sia solo numerico e abbia almeno 3 caratteri
         if not student_id.isdigit():
             print("La matricola deve contenere solo numeri.")
             continue
@@ -68,18 +88,36 @@ def registra_utente():
             continue
         break
 
+    # Hash di tutti i dati sensibili
+    hashed_password, salt_ex = hash_password(password)
+    hashed_email = hashlib.sha256(email.encode()).hexdigest()
+    hashed_matricola = hashlib.sha256(student_id.encode()).hexdigest()
+    hashed_nome = hashlib.sha256(nome.encode()).hexdigest()
+    hashed_cognome = hashlib.sha256(cognome.encode()).hexdigest()
+    hashed_data_nascita = hashlib.sha256(data_nascita.encode()).hexdigest()
+
     role = "s"
     
+    # Salvataggio nel file users.json
     with open("users.json", "a") as file:
-        user = {"email": email, "password": hashed_password, "student_id": student_id, "salt_ex": salt_ex, "role": role}
+        user = {
+            "email": hashed_email,
+            "password": hashed_password,
+            "student_id": hashed_matricola,
+            "nome": hashed_nome,
+            "cognome": hashed_cognome,
+            "data_nascita": hashed_data_nascita,
+            "salt_ex": salt_ex,
+            "role": role
+        }
         file.write(json.dumps(user) + "\n")
 
     global current_email
     global current_role
     global current_id
-    current_email = email;
-    current_role = role;
-    current_id = student_id;
+    current_email = email
+    current_role = role
+    current_id = student_id
     print("Registrazione completata! Ora sei connesso come:", email)
 
 def accedi_utente():
@@ -101,6 +139,25 @@ def accedi_utente():
                         current_id = utente["student_id"];
                         print(f"Accesso effettuato con successo! Benvenuto/a {email} - Ruolo: {'Studente' if utente['role'] == 's' else 'Università'}.")
                         return
+
+def get_student_info(matricola):
+    try:
+        with open("users.json", "r") as file:
+            for line in file:
+                user = json.loads(line)
+                # Confronta l'hash della matricola fornita con quello memorizzato
+                if user["student_id"] == hashlib.sha256(matricola.encode()).hexdigest():
+                    return {
+                        "firstName": user["nome"],
+                        "lastName": user["cognome"],
+                        "dateOfBirth": user["data_nascita"]
+                    }
+    except FileNotFoundError:
+        print("File users.json non trovato")
+        return None
+    return None
+
+
 
 # --- Main del Programma ---
 print("--- Benvenuto nel Sistema ---")
@@ -171,20 +228,43 @@ while True:
 
     elif current_role == "u" and scelta == "1":
         print("\n--- Emissione Credenziale ---")
-        credential_id = "urn:vc:example:cred001"
+
+        # Richiedi la matricola dello studente
+        matricola_studente = input("Inserisci la matricola dello studente: ")
+
+        # Recupera i dati dello studente
+        student_info = get_student_info(matricola_studente)
+        if not student_info:
+            print("Studente non trovato nel sistema.")
+            continue
+
+        # Genera un ID univoco per la credenziale
+        credential_id = f"urn:vc:example:{int(time.time())}"
         revocation_reference = credential_id
+
+        # Richiedi i dati del corso
+        print("\nInserisci i dati del corso:")
+        course_name = input("Nome del corso: ")
+        grade = input("Voto: ")
+        ects = int(input("Crediti ECTS: "))
+        semester = input("Semestre (es. 2024-2025/1): ")
+        completed = input("Corso completato? (s/n): ").lower() == 's'
+        description = input("Descrizione del corso: ")
+
+        # Prepara i dati della credenziale
         credential_subject_data = {
-            "studentId": "S12345",
-            "firstName": "Mario",
-            "lastName": "Rossi",
-            "dateOfBirth": "2000-01-15",
-            "courseName": "Algoritmi e Protocolli per la Sicurezza",
-            "grade": "30 cum laude",
-            "ectsCredits": 6,
-            "issueSemester": "2024-2025/1",
-            "courseCompleted": True,
-            "courseDescription": "Corso avanzato di sicurezza informatica."
+            "studentId": matricola_studente,
+            "firstName": student_info["firstName"],
+            "lastName": student_info["lastName"],
+            "dateOfBirth": student_info["dateOfBirth"],
+            "courseName": course_name,
+            "grade": grade,
+            "ectsCredits": ects,
+            "issueSemester": semester,
+            "courseCompleted": completed,
+            "courseDescription": description
         }
+
 
         issued_credential = AcademicCredential(
             id=credential_id,
