@@ -1,5 +1,6 @@
 {
   "revoked_ids": [
+    "urn:vc:example:1752851287",
     "urn:vc:example:cred001"
   ]
 }

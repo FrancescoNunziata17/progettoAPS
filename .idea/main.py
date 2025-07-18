@@ -22,7 +22,65 @@ from KDC import KDC, Client, Server
 from login_register import verify_password, hash_password
 current_email = "";
 current_id = ""
-current_role = "s";
+current_role = "u";
+
+def registra_università():
+    kdc = KDC()  # Ottiene l'istanza unica del KDC
+
+    # [Tutto il codice di validazione rimane invariato]
+    # Validazione nome università
+    while True:
+        nome = input("Inserisci il nome dell'università: ")
+        if len(nome) < 2 or not nome.replace(" ", "").isalpha():
+            print("Il nome deve contenere almeno 2 caratteri e solo lettere.")
+            continue
+        break
+
+    # Validazione ID
+    while True:
+        university_id = input("Inserisci l'ID dell'università: ")
+        if len(university_id) < 2:
+            print("L'ID deve contenere almeno 2 caratteri.")
+            continue
+        break
+
+    # Dopo le validazioni, creiamo un nuovo Client per l'utente
+    while True:
+        email = input("Inserisci la tua email per registrarti: ")
+        pattern_email = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not re.match(pattern_email, email):
+            print("Formato email non valido. Riprova.")
+            continue
+        break
+
+    while True:
+        password = input("Crea una password sicura: ")
+        if len(password) < 8:
+            print("La password deve essere lunga almeno 8 caratteri.")
+            continue
+        if not re.search(r'[A-Z]', password):
+            print("La password deve contenere almeno una lettera maiuscola.")
+            continue
+        if not re.search(r'\d', password):
+            print("La password deve contenere almeno un numero.")
+            continue
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+            print("La password deve contenere almeno un carattere speciale.")
+            continue
+        break
+    hashed_password, salt_ex = hash_password(password)
+
+    # Salvataggio nel file users.json
+    with open("users.json", "a") as file:
+        user = {
+            "nome": nome,
+            "email": email,  # email è l'identificativo pubblico
+            "password": hashed_password,  # password rimane hashata
+            "university_id": university_id,
+            "salt_ex": salt_ex,
+            "role": "u",
+        }
+        file.write(json.dumps(user) + "\n")
 
 # Funzioni di supporto per autenticazione
 def registra_utente():
@@ -183,7 +241,7 @@ def accedi_utente():
                         global current_id
                         current_email = email;
                         current_role = utente["role"];
-                        current_id = utente["student_id"];
+                        current_id = utente["student_id"] if current_role == "s" else utente["university_id"];
                         print(f"Accesso effettuato con successo! Benvenuto/a {email} - Ruolo: {'Studente' if utente['role'] == 's' else 'Università'}.")
                         return
 
@@ -193,7 +251,8 @@ def get_student_info(matricola):
             for line in file:
                 user = json.loads(line)
                 # Confronta l'hash della matricola fornita con quello memorizzato
-                if user["student_id"] == hashlib.sha256(matricola.encode()).hexdigest():
+                if "student_id" in user:
+                #if user["student_id"] == hashlib.sha256(matricola.encode()).hexdigest() and user["role"] == "s":
                     return {
                         "firstName": user["nome"],
                         "lastName": user["cognome"],
@@ -210,7 +269,13 @@ def get_student_info(matricola):
 print("--- Benvenuto nel Sistema ---")
 scelta = input("Vuoi registrarti o accedere? (r/a): ").lower()
 if scelta == "r":
-    registra_utente()
+    if current_role == "s":
+        registra_utente()
+    elif current_role == "u":
+        registra_università()
+    else:
+        print("Errore")
+        exit()
     print(f"Benvenuto {current_email}")
 elif scelta == "a":
     accedi_utente()
@@ -222,25 +287,8 @@ else:
 # Inizializza il simulatore di blockchain
 blockchain_register = BlockchainSimulator()
 
-# Generazione/Caricamento Chiavi dell'Università Emittente
-issuer_private_key_file = "issuer_private_key.pem"
-issuer_public_key_file = "issuer_public_key.pem"
-issuer_password = "my_strong_password"  # Usa una password più robusta in un caso reale
-
-try:
-    issuer_private_key = load_private_key(issuer_private_key_file, password=issuer_password)
-    issuer_public_key = load_public_key(issuer_public_key_file)
-    print("Chiavi dell'emittente caricate.")
-except FileNotFoundError:
-    print("Chiavi dell'emittente non trovate, generazione di nuove chiavi...")
-    issuer_private_key, issuer_public_key = generate_key_pair()
-    save_private_key(issuer_private_key, issuer_private_key_file, password=issuer_password)
-    save_public_key(issuer_public_key, issuer_public_key_file)
-    print("Nuove chiavi dell'emittente generate e salvate.")
-
 # Inizializza il wallet dello studente (solo per studenti)
 if current_role == "s":
-    student_id = ""
     student_wallet = StudentWallet(current_id)
     print(f"Wallet dello studente {current_email} inizializzato.")
 
@@ -314,6 +362,9 @@ while True:
 
         # Ottieni istanza KDC e crea una sessione per cifrare i dati
         kdc = KDC()
+        client = Client(current_email)
+        # Registriamo la chiave pubblica del client nel KDC
+        kdc.register_user(current_email, client.public_key)
         server_id = "credential_server"
         session_key, ticket = client.request_service(kdc, server_id)
         f = Fernet(session_key)
@@ -325,14 +376,15 @@ while True:
         with open("users.json", "r+") as file:
             users = [json.loads(line) for line in file]
             for user in users:
-                if user["student_id"]["encrypted_data"] == student_id:  # Trova lo studente corretto
-                    if "academic_credentials" not in user:
-                        user["academic_credentials"] = []
-                    user["academic_credentials"].append({
-                        "encrypted_data": base64.b64encode(encrypted_credential).decode(),
-                        "ticket": ticket
-                    })
-                    break
+                if "student_id" in user:
+                    if user["student_id"]["encrypted_data"] == student_info:  # Trova lo studente corretto
+                        if "academic_credentials" not in user:
+                            user["academic_credentials"] = []
+                        user["academic_credentials"].append({
+                            "encrypted_data": base64.b64encode(encrypted_credential).decode(),
+                            "ticket": ticket
+                        })
+                        break
             
             # Riscrivi il file con i dati aggiornati
             file.seek(0)
@@ -343,12 +395,13 @@ while True:
         # Crea e firma la credenziale
         issued_credential = AcademicCredential(
             id=credential_id,
-            issuer_id="did:example:universityofrennes",
-            holder_id=student_id,
+            issuer_id=current_id,
+            holder_id=matricola_studente,
             credential_subject=credential_subject_data,
             issuance_date=datetime.now().isoformat()
         )
-        issued_credential.sign(issuer_private_key, revocation_reference)
+
+        issued_credential.sign(client.private_key, revocation_reference)
         
         # Registra nella blockchain
         if not blockchain_register.is_revoked(revocation_reference):
