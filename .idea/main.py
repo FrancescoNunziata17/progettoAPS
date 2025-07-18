@@ -33,6 +33,7 @@ def registra_utente():
             continue
         break
 
+
     while True:
         password = input("Crea una password sicura: ")
         # Verifica lunghezza minima
