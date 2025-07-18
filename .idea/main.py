@@ -372,38 +372,38 @@ while True:
         # Cifra i dati della credenziale
         encrypted_credential = f.encrypt(json.dumps(credential_subject_data).encode())
 
-        # Aggiorna il file users.json con la nuova credenziale cifrata
-        with open("users.json", "r+") as file:
-            users = [json.loads(line) for line in file]
-            for user in users:
-                if "student_id" in user:
-                    if user["student_id"]["encrypted_data"] == student_info:  # Trova lo studente corretto
-                        if "academic_credentials" not in user:
-                            user["academic_credentials"] = []
-                        user["academic_credentials"].append({
-                            "encrypted_data": base64.b64encode(encrypted_credential).decode(),
-                            "ticket": ticket
-                        })
-                        break
-            
-            # Riscrivi il file con i dati aggiornati
-            file.seek(0)
-            for user in users:
-                file.write(json.dumps(user) + "\n")
-            file.truncate()
+        # ** Codifichiamo in base64 per creare una stringa rappresentabile **
+        encrypted_credential_base64 = base64.b64encode(encrypted_credential).decode()
 
         # Crea e firma la credenziale
         issued_credential = AcademicCredential(
             id=credential_id,
             issuer_id=current_id,
             holder_id=matricola_studente,
-            credential_subject=credential_subject_data,
+            credential_subject={"encrypted_data": encrypted_credential_base64},  # Usa base64 come rappresentazione
             issuance_date=datetime.now().isoformat()
         )
 
 
         issued_credential.sign(client.private_key, revocation_reference)
-        
+
+        # Carica le credenziali esistenti
+        credentials_list = {"credentials": []}
+        if os.path.exists("FileFolder/Uni_credential.json"):
+            with open("FileFolder/Uni_credential.json", "r") as f:
+                try:
+                    credentials_list = json.load(f)
+                except json.JSONDecodeError:
+                    pass
+
+        # Aggiungi la nuova credenziale alla lista
+        credentials_list["credentials"].append(issued_credential.to_dict())
+
+        # Salva nel file
+        os.makedirs("FileFolder", exist_ok=True)
+        with open("FileFolder/Uni_credential.json", "w") as f:
+            json.dump(credentials_list, f, indent=2)
+
         # Registra nella blockchain
         if not blockchain_register.is_revoked(revocation_reference):
             blockchain_register.revoked_credentials.add(revocation_reference)

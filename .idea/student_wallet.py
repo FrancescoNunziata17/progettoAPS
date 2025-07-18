@@ -59,10 +59,10 @@ class StudentWallet:
             f = Fernet(session_key)
 
             # Recupera i dati cifrati e le credenziali
-            with open("users.json", "r") as file:
+            with open("Uni_credential.json", "r") as file:
                 for line in file:
-                    user = json.loads(line)
-                    if user["email"] == email:
+                    credential = json.loads(line)
+                    if credential["holder"]["id"] == email:
                         # Decifra i dati personali
                         self.personal_data = {
                             "nome": f.decrypt(base64.b64decode(user["nome"]["encrypted_data"])).decode(),
