@@ -5,3 +5,6 @@
 {"email": "b", "password": "pQ35RWTW0N6NH5_d7rD_afDBYOB4MHWVeZRdCMm7a9A=", "student_id": "0622709876", "salt_ex": "2e8cce9c5be8d30ac1e26b36d430f89d", "role": "s"}
 {"email": "n", "password": "jzHMkacC8ti52LFvWY_iCeVOdIk5rlIEqX6hAIDRV4I=", "student_id": "0622709876", "salt_ex": "005c5a5b9d65de89f7c1b039460dfbe2", "role": "s"}
 {"email": "d", "password": "RY0wHOEfAd-tYnvFMW1vyMkJ7IGnIvrEveyXxZEIsx4=", "student_id": "0", "salt_ex": "c6d5ff156d1da7366afcd8a8c589c877", "role": "s"}
+{"email": "ciao", "password": "fShX5tqbfz6lH1ZCsD1I_ON0rszYm8r41kS64iq7JgM=", "student_id": "9", "salt_ex": "7b6534e629a66ad93abf1a397f83b606", "role": "s"}
+{"email": "posto@ciao.it", "password": "lbQ2uWl-jq5eqlV53j2ms7kPv3zXB-irF56kk20KGSw=", "student_id": "123", "salt_ex": "c7499b54b3dc4b69931315874bc80012", "role": "s"}
+{"email": "ciao@ciao.ciao", "password": "fgy3Jbsf_RdTvpM1MunkuNK_6FlB7TLK3ULqztYxS7E=", "student_id": "123", "salt_ex": "20bd579c7f7cfb71323b4ecbcc8802d6", "role": "s"}
