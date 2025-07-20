@@ -11,27 +11,25 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.exceptions import InvalidSignature
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-# Assicurati che questi moduli siano nei percorsi corretti
+# Assicurati che questi moduli siano nei percorsi corretti e contengano le funzioni necessarie
 from credential import AcademicCredential, generate_key_pair, save_private_key, load_private_key, save_public_key, load_public_key
-from merkle_tree import MerkleTree
-from blockchain_simulator import BlockchainSimulator
-from student_wallet import StudentWallet
-from KDC import KDC, Client, Server # Importa le tue classi KDC
+from merkle_tree import MerkleTree # Se usi MerkleTree
+from blockchain_simulator import BlockchainSimulator # Se usi BlockchainSimulator
+from student_wallet import StudentWallet # Se usi StudentWallet
 from login_register import verify_password, hash_password # Importa le tue funzioni corrette
 
 # Variabili globali per lo stato della sessione
 current_email = ""
 current_id = ""
-current_role = "u" # Default a 'u' o 's' in base alla prima scelta
-
+current_role = "" # Sarà impostato a 'u' o 's' dopo la scelta iniziale
 
 def registra_universita():
     """
     Gestisce il processo di registrazione di una nuova università.
     Richiede nome, ID università, email e password.
+    Genera e salva la coppia di chiavi RSA per l'università.
     """
     # Validazione nome università
     while True:
@@ -66,10 +64,9 @@ def registra_universita():
                                 print("Errore: Utente con questa email già registrato.")
                                 return None, None, None
                         except json.JSONDecodeError:
-                            print(f"DEBUG: Trovata riga malformata in users.json: {line.strip()}")
-                            continue
+                            continue # Salta righe malformate
         except FileNotFoundError:
-            pass
+            pass # Il file non esiste, nessun problema
         except Exception as e:
             print(f"ERRORE GRAVE durante la verifica dell'email in users.json: {e}")
             return None, None, None
@@ -99,8 +96,6 @@ def registra_universita():
         private_key, public_key = generate_key_pair()
         save_private_key(private_key, email, password)
         save_public_key(public_key, email)
-        print("DEBUG (credential): Chiave privata salvata in keys\\{}_private.pem".format(email))
-        print("DEBUG (credential): Chiave pubblica salvata in keys\\{}_public.pem".format(email))
         print("DEBUG: Coppia di chiavi RSA per Università generata e salvata con successo.")
     except Exception as e:
         print(f"ERRORE: Impossibile generare o salvare le chiavi per l'Università. Errore: {e}")
@@ -119,17 +114,17 @@ def registra_universita():
         file.write(json.dumps(user) + "\n")
 
     print(f"Registrazione Università {nome} completata!")
-    return email, password, university_id # Restituisce anche l'ID per impostare current_id
+    return email, password, university_id
 
 def registra_studente():
     """
     Gestisce il processo di registrazione di un nuovo utente (studente).
     Richiede email e password, genera una matricola, crea coppie di chiavi RSA,
-    interagisce con il KDC per cifrare i dati personali e li salva.
+    cifra i dati personali usando un approccio ibrido RSA/Fernet e li salva.
 
     Returns:
-        tuple: (email, password) se la registrazione è avvenuta con successo.
-               (None, None) in caso di fallimento della registrazione.
+        tuple: (email, password, matricola) se la registrazione è avvenuta con successo.
+               (None, None, None) in caso di fallimento.
     """
     global current_email, current_role, current_id
 
@@ -147,104 +142,104 @@ def registra_studente():
                         try:
                             if json.loads(line).get("email") == email:
                                 print("Errore: Utente con questa email già registrato.")
-                                return None, None, None # Aggiunto None per matricola
+                                return None, None, None
                         except json.JSONDecodeError:
-                            print(f"DEBUG: Trovata riga malformata in users.json: {line.strip()}")
-                            continue
+                            continue # Salta righe malformate
         except FileNotFoundError:
             pass
         except Exception as e:
             print(f"ERRORE GRAVE durante la verifica dell'email in users.json: {e}")
-            return None, None, None # Aggiunto None per matricola
+            return None, None, None
 
         password = input("Inserisci la password: ")
         if len(password) < 8:
             print("La password deve essere di almeno 8 caratteri.")
             continue
-        # Potresti aggiungere qui anche i controlli per maiuscole, numeri, caratteri speciali come per l'università
+        if not re.search(r'[A-Z]', password):
+            print("La password deve contenere almeno una lettera maiuscola.")
+            continue
+        if not re.search(r'\d', password):
+            print("La password deve contenere almeno un numero.")
+            continue
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+            print("La password deve contenere almeno un carattere speciale.")
+            continue
+        break
 
-        # Hashing della password e generazione del salt
-        hashed_password_str, actual_salt_str = hash_password(password)
+    # Hashing della password e generazione del salt
+    hashed_password_str, actual_salt_str = hash_password(password)
 
-        # Genera la matricola per il nuovo studente
-        matricola = str(random.randint(100, 999)) # Genera una matricola di 3 cifre
-        print(f"DEBUG: Matricola generata per il nuovo studente: {matricola}")
+    # Genera la matricola per il nuovo studente
+    matricola = str(random.randint(100, 999)) # Genera una matricola di 3 cifre
+    print(f"DEBUG: Matricola generata per il nuovo studente: {matricola}")
 
-        try:
-            # --- Generazione e salvataggio delle chiavi RSA ---
-            print("DEBUG: Generazione della coppia di chiavi RSA per l'utente...")
-            private_key, public_key = generate_key_pair()
-            save_private_key(private_key, email, password)
-            save_public_key(public_key, email)
-            print("DEBUG (credential): Chiave privata salvata in keys\\{}_private.pem".format(email))
-            print("DEBUG (credential): Chiave pubblica salvata in keys\\{}_public.pem".format(email))
-            print("DEBUG: Coppia di chiavi RSA generata e salvata con successo.")
+    try:
+        # --- Generazione e salvataggio delle chiavi RSA ---
+        print("DEBUG: Generazione della coppia di chiavi RSA per l'utente...")
+        private_key, public_key = generate_key_pair()
+        save_private_key(private_key, email, password)
+        save_public_key(public_key, email)
+        print("DEBUG: Coppia di chiavi RSA generata e salvata con successo.")
 
-            # --- Interazione con il KDC per cifrare i dati personali ---
-            print("DEBUG: Inizializzazione client KDC per la registrazione...")
-            client_reg = Client(email)
-            client_reg.private_key = private_key
-            client_reg.public_key = public_key
+        # --- Cifratura dei dati personali con Fernet (chiave cifrata con RSA) ---
+        print("DEBUG: Generazione e cifratura della chiave di sessione per i dati personali...")
+        personal_data_fernet_key = Fernet.generate_key()
+        fernet_personal_data = Fernet(personal_data_fernet_key)
 
-            kdc_reg = KDC() # KDC è un singleton, quindi si assicura che il master_secret sia lo stesso
-            kdc_reg.register_user(email, client_reg.public_key)
-            print("DEBUG: Utente registrato al KDC per questa sessione.")
+        # Cifra la chiave Fernet appena generata con la chiave pubblica RSA dello studente
+        encrypted_fernet_key_for_personal_data = public_key.encrypt(
+            personal_data_fernet_key,
+            padding.OAEP(
+                mgf=padding.MGF1(hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        ).hex() # Converti in esadecimale per salvarlo in JSON
 
-            server_id_reg = "registration_server"
-            print(f"DEBUG: Richiesta servizio al KDC per server_id: {server_id_reg}")
+        print("DEBUG: Chiave Fernet per dati personali generata e cifrata con RSA.")
 
-            fernet_reg, ticket_reg = client_reg.request_service(kdc_reg, server_id_reg)
+        # Cifratura della matricola e altri dati personali con la chiave Fernet
+        encrypted_matricola_data = base64.urlsafe_b64encode(fernet_personal_data.encrypt(matricola.encode())).decode('ascii')
+        encrypted_nome_data = base64.urlsafe_b64encode(fernet_personal_data.encrypt("Mario".encode())).decode('ascii')
+        encrypted_cognome_data = base64.urlsafe_b64encode(fernet_personal_data.encrypt("Rossi".encode())).decode('ascii')
+        encrypted_data_nascita = base64.urlsafe_b64encode(fernet_personal_data.encrypt("2000-01-01".encode())).decode('ascii')
 
-            print(f"DEBUG (main.registra_studente): Type of fernet_reg after request_service: {type(fernet_reg)}")
-            print(f"DEBUG (main.registra_studente): Is fernet_reg a Fernet instance? {isinstance(fernet_reg, Fernet)}")
-            print(f"DEBUG (main.registra_studente): Chiave di sessione e ticket ottenuti dal KDC per la registrazione.")
+        user_data = {
+            "email": email,
+            "password": hashed_password_str,
+            "salt_ex": actual_salt_str,
+            "role": "s",
+            "personal_data_encrypted": { # Nuovo campo per i dati personali cifrati
+                "encrypted_fernet_key": encrypted_fernet_key_for_personal_data, # Chiave Fernet cifrata con RSA
+                "matricola": encrypted_matricola_data,
+                "nome": encrypted_nome_data,
+                "cognome": encrypted_cognome_data,
+                "data_nascita": encrypted_data_nascita
+            },
+            "credentials": [] # Campo per coerenza con StudentWallet, se le credenziali vengono salvate anche qui
+        }
 
-            # --- Cifratura dei dati personali con Fernet e la chiave di sessione ---
-            # IMPORTANT: Use base64.urlsafe_b64encode for consistency with Fernet's output
-            encrypted_matricola_data = base64.urlsafe_b64encode(fernet_reg.encrypt(matricola.encode())).decode('ascii')
+        with open("users.json", "a") as f:
+            f.write(json.dumps(user_data) + "\n")
+        print(f"DEBUG: Dati utente salvati in users.json per {email}.")
 
-            user_data = {
-                "email": email,
-                "password": hashed_password_str,
-                "salt_ex": actual_salt_str,
-                "role": "s",
-                "student_id": {
-                    "encrypted_data": encrypted_matricola_data,
-                    "ticket": ticket_reg
-                },
-                "personal_info_ticket": ticket_reg,
-                "nome": {
-                    "encrypted_data": base64.urlsafe_b64encode(fernet_reg.encrypt("Mario".encode())).decode('ascii'),
-                },
-                "cognome": {
-                    "encrypted_data": base64.urlsafe_b64encode(fernet_reg.encrypt("Rossi".encode())).decode('ascii'),
-                },
-                "data_nascita": {
-                    "encrypted_data": base64.urlsafe_b64encode(fernet_reg.encrypt("2000-01-01".encode())).decode('ascii'),
-                },
-            }
+        current_email = email
+        current_role = "s"
+        current_id = matricola
+        print(f"DEBUG: Variabili globali impostate: email={current_email}, role={current_role}, id={current_id}")
 
-            with open("users.json", "a") as f:
-                f.write(json.dumps(user_data) + "\n")
-            print(f"DEBUG: Dati utente salvati in users.json per {email}.")
+        print(f"Registrazione completata! Ora sei connesso come: {email}")
+        return email, password, matricola
 
-            current_email = email
-            current_role = "s"
-            current_id = matricola
-            print(f"DEBUG: Variabili globali impostate: email={current_email}, role={current_role}, id={current_id}")
-
-            print(f"Registrazione completata! Ora sei connesso come: {email}")
-            return email, password, matricola # Restituisce anche la matricola
-
-        except Exception as e:
-            print(f"ERRORE GRAVE DURANTE LA REGISTRAZIONE: {e}")
-            return None, None, None # Aggiunto None per matricola
-
+    except Exception as e:
+        print(f"ERRORE GRAVE DURANTE LA REGISTRAZIONE: {e}")
+        return None, None, None
 
 def accedi_utente(user_type: str):
     """
     Gestisce il processo di accesso dell'utente (studente o università).
     Autentica l'utente e imposta le variabili globali di sessione.
+    Per gli studenti, decifra i dati personali usando l'approccio ibrido RSA/Fernet.
 
     Args:
         user_type (str): 's' per studente, 'u' per università.
@@ -294,56 +289,53 @@ def accedi_utente(user_type: str):
 
         if current_role == "s":
             try:
-                print(f"DEBUG (main): Tentativo di decifrare la matricola per lo studente: {email}")
+                print(f"DEBUG (main): Tentativo di decifrare i dati personali per lo studente: {email}")
 
-                client_temp = Client(email)
                 private_key = load_private_key(email, password)
                 if private_key is None:
                     raise ValueError(f"Impossibile caricare la chiave privata per {email}.")
 
-                client_temp.private_key = private_key
-                client_temp.public_key = private_key.public_key()
-                print(f"DEBUG (main): Chiave privata del client temporaneo caricata per {email}.")
+                print(f"DEBUG (main): Chiave privata caricata per {email}.")
 
-                kdc = KDC()
-                kdc.register_user(email, client_temp.public_key)
-                print(f"DEBUG (main): Utente {email} registrato al KDC per la decifrazione della matricola.")
+                # Decifra la chiave Fernet usando la chiave privata RSA dello studente
+                encrypted_fernet_key_hex = user_data_found["personal_data_encrypted"]["encrypted_fernet_key"]
+                encrypted_fernet_key_bytes = bytes.fromhex(encrypted_fernet_key_hex)
 
-                # IL server_id DEVE ESSERE LO STESSO USATO DURANTE LA REGISTRAZIONE
-                # Che per i dati personali (matricola, nome, cognome, etc.) è "registration_server"
-                server_id = "registration_server" # <-- Modifica qui
+                personal_data_fernet_key = private_key.decrypt(
+                    encrypted_fernet_key_bytes,
+                    padding.OAEP(
+                        mgf=padding.MGF1(hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None
+                    )
+                )
+                fernet_personal_data = Fernet(personal_data_fernet_key)
+                print("DEBUG (main): Chiave Fernet per dati personali decifrata con successo.")
 
-                fernet_obj_kdc_response, ticket = client_temp.request_service(kdc, server_id)
-
-                print(f"DEBUG (main.accedi_utente): Type of fernet_obj_kdc_response after request_service: {type(fernet_obj_kdc_response)}")
-                print(f"DEBUG (main.accedi_utente): Is fernet_obj_kdc_response a Fernet instance? {isinstance(fernet_obj_kdc_response, Fernet)}")
-                print(f"DEBUG (main.accedi_utente): Chiave di sessione e ticket ottenuti dal KDC.")
-
-                data_server = Server(server_id)
-                success, server_fernet_obj = data_server.handle_client_request(kdc, ticket['data'], ticket['signature'])
-
-                if not success:
-                    raise ValueError("Errore nella verifica del ticket KDC per la decifrazione della matricola.")
-                print(f"DEBUG (main): Ticket KDC verificato con successo per {email}.")
-
-                # Use fernet_obj_kdc_response directly
-                encrypted_matricola_data = user_data_found["student_id"]["encrypted_data"]
-
-                # IMPORTANT: Use base64.urlsafe_b64decode here
-                decrypted_matricola = fernet_obj_kdc_response.decrypt(base64.urlsafe_b64decode(encrypted_matricola_data)).decode('ascii')
+                # Decifra i dati personali usando la chiave Fernet
+                encrypted_matricola_data = user_data_found["personal_data_encrypted"]["matricola"]
+                decrypted_matricola = fernet_personal_data.decrypt(base64.urlsafe_b64decode(encrypted_matricola_data)).decode('utf-8')
                 current_id = decrypted_matricola
                 print(f"DEBUG (main): Matricola dello studente '{email}' decifrata: {current_id}")
-                return email, password, current_id # Restituisce anche l'ID per coerenza
+
+                # Decifrare anche nome, cognome, data_nascita per completezza (non indispensabile qui ma utile)
+                decrypted_nome = fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_found["personal_data_encrypted"]["nome"])).decode('utf-8')
+                decrypted_cognome = fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_found["personal_data_encrypted"]["cognome"])).decode('utf-8')
+                decrypted_data_nascita = fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_found["personal_data_encrypted"]["data_nascita"])).decode('utf-8')
+
+
+                print(f"Accesso studente {email} riuscito! Matr: {current_id}")
+                return email, password, current_id
 
             except Exception as e:
-                print(f"ERRORE GRAVE: Impossibile decifrare la matricola dello studente {email}. Errore: {e}")
+                print(f"ERRORE GRAVE: Impossibile decifrare i dati personali dello studente {email}. Errore: {e}")
                 current_id = None
                 return None, None, None
 
         elif current_role == "u":
             current_id = user_data_found["university_id"]
             print(f"Accesso effettuato con successo! Benvenuto/a {email} - Ruolo: {'Studente' if current_role == 's' else 'Università'}.")
-            return email, password, current_id # Restituisce l'ID università
+            return email, password, current_id
 
         print(f"Accesso effettuato con successo! Benvenuto/a {email} - Ruolo: {'Studente' if current_role == 's' else 'Università'}.")
         return email, password, None # Fallback se nessun ID specifico
@@ -352,30 +344,33 @@ def accedi_utente(user_type: str):
 def get_student_info(matricola: str) -> dict:
     """
     Recupera i dati personali di uno studente dato il suo ID (matricola).
-    Questa funzione simula l'accesso a un database di studenti o al loro wallet salvato.
+    Questa funzione cerca i dati nel wallet dello studente, che si presume sia
+    già stato caricato e decifrato da StudentWallet.
+    È principalmente usata per il debug o per simulazioni interne al sistema studente.
+    L'università NON dovrebbe usare questa funzione per ottenere i dati sensibili.
     """
     try:
-        if not os.path.exists("FileFolder"): # Controlla la cartella, non solo il file
-            print("DEBUG: Cartella FileFolder non trovata.")
+        wallets_folder = "wallets"
+
+        if not os.path.exists(wallets_folder):
+            print(f"DEBUG: Cartella {wallets_folder} non trovata.")
             return None
 
-        # Itera su tutti i file nella cartella FileFolder
-        for filename in os.listdir("FileFolder"):
-            if filename.startswith("student_wallet_") and filename.endswith(".json"):
-                wallet_path = os.path.join("FileFolder", filename)
+        for filename in os.listdir(wallets_folder):
+            if filename.endswith("_wallet.json"):
+                wallet_path = os.path.join(wallets_folder, filename)
                 try:
                     with open(wallet_path, 'r') as wallet_f:
                         wallet_data = json.load(wallet_f)
                         personal_data = wallet_data.get('personal_data', {})
 
-                        # Assicurati che 'matricola' esista in personal_data e sia una stringa per confronto
-                        # Se personal_data.get('matricola') può essere int, convertilo a str per il confronto
                         if str(personal_data.get('matricola')) == matricola:
                             print(f"DEBUG: Trovato studente con matricola {matricola} nel wallet salvato: {wallet_path}.")
                             return {
                                 "firstName": personal_data.get("nome", "N/A"),
                                 "lastName": personal_data.get("cognome", "N/A"),
-                                "dateOfBirth": personal_data.get("data_nascita", "N/A")
+                                "dateOfBirth": personal_data.get("data_nascita", "N/A"),
+                                "email": personal_data.get("email", "N/A")
                             }
                         else:
                             print(f"DEBUG: Matricola {matricola} non corrispondente per wallet {filename}.")
@@ -391,10 +386,11 @@ def get_student_info(matricola: str) -> dict:
         print(f"ERRORE GRAVE in get_student_info: {outer_e}")
         return None
 
+
 def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, student_password):
     """
     Recupera le credenziali emesse dall'università per lo studente specificato,
-    le decifra e le aggiunge al wallet dello studente.
+    le decifra usando l'approccio ibrido RSA/Fernet e le aggiunge al wallet dello studente.
     """
     print(f"DEBUG (main): Tentativo di recuperare credenziali per {student_email}...")
     uni_credential_file_path = "FileFolder/Uni_credential.json"
@@ -417,30 +413,14 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
         print("DEBUG (main): Nessuna credenziale trovata in Uni_credential.json.")
         return
 
-    # Prepara il client e il KDC per la decifratura delle credenziali dello studente
+    # Carica la chiave privata dello studente una sola volta
     try:
-        student_client = Client(student_email)
         student_private_key = load_private_key(student_email, student_password)
         if student_private_key is None:
             raise ValueError(f"Impossibile caricare la chiave privata per {student_email}.")
-        student_client.private_key = student_private_key
-        student_client.public_key = student_private_key.public_key()
-
-        kdc = KDC()
-        kdc.register_user(student_email, student_client.public_key)
-
-        server_id_credential_data = "credential_server"
-        fernet_credential_obj, ticket_credential = student_client.request_service(kdc, server_id_credential_data)
-
-        credential_server_obj = Server(server_id_credential_data)
-        success_credential, _ = credential_server_obj.handle_client_request(kdc, ticket_credential['data'], ticket_credential['signature'])
-
-        if not success_credential:
-            print("ERRORE (main): Verifica ticket fallita per recupero credenziali.")
-            return
-
+        print(f"DEBUG (main): Chiave privata dello studente caricata per {student_email}.")
     except Exception as e:
-        print(f"ERRORE (main): Errore durante l'inizializzazione KDC per il recupero credenziali: {e}")
+        print(f"ERRORE (main): Errore durante il caricamento della chiave privata dello studente: {e}")
         return
 
     new_credentials_added = False
@@ -448,21 +428,39 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
     print(f"DEBUG (main): Numero di credenziali trovate in Uni_credential.json: {len(emitted_credentials)}")
 
     for i, cred_dict in enumerate(emitted_credentials):
-        # ACCESSO CORRETTO ALL'ID DEL HOLDER DALLA STRUTTURA DELLA CREDENZIALE
         cred_holder_id = cred_dict.get("holder", {}).get("id")
 
         print(f"DEBUG (main): Esaminando credenziale {i+1}/{len(emitted_credentials)}: ID={cred_dict.get('id')}, Holder_ID nel file Uni: {cred_holder_id}")
 
-        # Confronto con la matricola dello studente, assicurandosi che entrambi siano stringhe
         if str(cred_holder_id) == str(student_wallet_obj.student_matricola):
             print(f"DEBUG (main): Trovata corrispondenza matricola per credenziale {cred_dict.get('id')}.")
-            encrypted_subject = cred_dict.get("credential_subject", {}).get("encrypted_data")
-            if encrypted_subject:
+
+            # Recupera la chiave Fernet cifrata e il soggetto cifrato
+            encrypted_subject = cred_dict.get("credentialSubject", {}).get("encrypted_data")
+            encrypted_fernet_key_for_subject = cred_dict.get("credentialSubject", {}).get("encrypted_fernet_key")
+
+            if encrypted_subject and encrypted_fernet_key_for_subject:
                 try:
+                    # Decifra la chiave Fernet specifica per questa credenziale usando la chiave privata RSA dello studente
+                    decrypted_fernet_key_bytes = student_private_key.decrypt(
+                        bytes.fromhex(encrypted_fernet_key_for_subject),
+                        padding.OAEP(
+                            mgf=padding.MGF1(hashes.SHA256()),
+                            algorithm=hashes.SHA256(),
+                            label=None
+                        )
+                    )
+                    fernet_credential_obj = Fernet(decrypted_fernet_key_bytes)
+                    print(f"DEBUG (main): Chiave Fernet per credenziale '{cred_dict.get('id')}' decifrata con successo.")
+
+                    # Decifra il soggetto della credenziale usando la chiave Fernet
                     decrypted_subject_bytes = fernet_credential_obj.decrypt(base64.urlsafe_b64decode(encrypted_subject))
                     decrypted_subject = json.loads(decrypted_subject_bytes.decode('utf-8'))
 
-                    cred_dict["credential_subject"] = decrypted_subject
+                    # Aggiorna il dizionario con il soggetto decifrato (rimuovi la chiave cifrata qui per la presentazione)
+                    cred_dict["credentialSubject"] = decrypted_subject # Correggi il nome del campo in "credentialSubject"
+                    if "encrypted_fernet_key" in cred_dict.get("credentialSubject", {}):
+                        del cred_dict["credentialSubject"]["encrypted_fernet_key"] # Rimuovi la chiave cifrata per la pulizia
 
                     is_duplicate = False
                     for existing_cred in student_wallet_obj.credentials:
@@ -478,18 +476,17 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
                         print(f"DEBUG (main): Credenziale '{cred_dict.get('id')}' già presente nel wallet dello studente. Saltata.")
 
                 except Exception as e:
-                    print(f"ERRORE (main): Impossibile decifrare la credenziale '{cred_dict.get('id')}': {e}. Questo potrebbe essere dovuto a una chiave di sessione non corretta o dati corrotti.")
+                    print(f"ERRORE (main): Impossibile decifrare la credenziale '{cred_dict.get('id')}': {e}. Assicurati che la chiave Fernet sia stata cifrata correttamente con la chiave pubblica dello studente e che la chiave privata sia corretta.")
             else:
-                print(f"AVVISO (main): Credenziale '{cred_dict.get('id')}' senza dati cifrati nel subject.")
+                print(f"AVVISO (main): Credenziale '{cred_dict.get('id')}' senza dati cifrati o chiave Fernet cifrata.")
         else:
             print(f"DEBUG (main): La matricola della credenziale ({cred_holder_id}) NON corrisponde alla matricola dello studente ({student_wallet_obj.student_matricola}). Saltata.")
 
     if new_credentials_added:
-        student_wallet_obj._save_wallet_data()
+        student_wallet_obj.save_wallet_to_file()
         print("DEBUG (main): Wallet dello studente aggiornato con nuove credenziali.")
     else:
         print("DEBUG (main): Nessuna nuova credenziale aggiunta al wallet dello studente.")
-
 
 
 ### Main del Programma
@@ -504,7 +501,7 @@ while True:
     else:
         print("Scelta non valida. Inserisci 'u' o 's'.")
 
-logged_in_email, logged_in_password, logged_in_id = None, None, None # Aggiunto logged_in_id
+logged_in_email, logged_in_password, logged_in_id = None, None, None
 
 # Scelta di registrazione o accesso in base al ruolo
 scelta = input("Vuoi registrarti o accedere? (r/a): ").lower()
@@ -519,8 +516,8 @@ if scelta == "r":
         print("Registrazione fallita o incompleta. Terminando il programma.")
         exit()
     current_role = role_choice
-    current_email = logged_in_email # Aggiorna current_email qui
-    current_id = logged_in_id # Aggiorna current_id qui
+    current_email = logged_in_email
+    current_id = logged_in_id
 
 elif scelta == "a":
     logged_in_email, logged_in_password, logged_in_id = accedi_utente(role_choice)
@@ -529,25 +526,27 @@ elif scelta == "a":
         exit()
     # Le variabili globali current_email, current_role, current_id sono già impostate
     # all'interno di accedi_utente se l'accesso ha successo.
-    # Quindi non serve aggiungere altro qui.
+    current_role = role_choice # Assicurati che current_role sia impostato in base alla scelta iniziale
 
 else:
     print("Scelta non valida. Terminando il programma.")
     exit()
 
-# Inizializza il simulatore di blockchain
+# Inizializza il simulatore di blockchain (se usato nel progetto)
 blockchain_register = BlockchainSimulator()
 
 # Inizializza il wallet dello studente (solo per studenti)
 student_wallet = None
 if current_role == "s":
-    student_wallet = StudentWallet(current_id)
+    student_wallet = StudentWallet(current_id) # Il wallet è inizializzato con la matricola decifrata
     print(f"Wallet dello studente {current_email} inizializzato con matricola: {current_id}.")
 
-    # Questa riga innescherà il caricamento/decifratura/salvataggio del wallet
+    # Carica i dati personali e le credenziali nel wallet
+    # Qui il wallet si occupa di caricare i dati personali dal suo file, se esiste
+    # e recuperare le credenziali pertinenti.
     if logged_in_email and student_wallet.load_student_data_and_credentials(logged_in_email, logged_in_password):
         print("Dati personali e credenziali caricati nel wallet.")
-        # CHIAMATA ALLA NUOVA FUNZIONE PER RECUPERARE LE CREDENZIALI
+        # CHIAMATA ALLA FUNZIONE PER RECUPERARE E AGGIUNGERE LE CREDENZIALI
         retrieve_and_add_credentials_to_wallet(student_wallet, logged_in_email, logged_in_password)
     else:
         print("Impossibile caricare i dati personali o le credenziali dello studente. Assicurati di aver fatto accesso almeno una volta.")
@@ -596,12 +595,23 @@ while True:
     elif current_role == "u" and scelta == "1":
         print("\n--- Emissione Credenziale ---")
 
-        matricola_studente = input("Inserisci la matricola dello studente a cui emettere la credenziale: ")
+        student_email_for_public_key = input("Inserisci l'email dello studente a cui emettere la credenziale: ")
+        # NUOVA RIGA: Chiedi esplicitamente la matricola allo studente
+        student_matricola_to_issue = input(f"Inserisci la MATRICOLA dello studente '{student_email_for_public_key}' (DEVE ESSERE QUELLA CORRETTA): ")
 
-        student_info = get_student_info(matricola_studente)
-        if not student_info:
-            print("Studente non trovato o dati non disponibili per questa matricola.")
+        # Carica la chiave pubblica dello studente per cifrare il soggetto della credenziale
+        student_public_key = load_public_key(student_email_for_public_key)
+        if student_public_key is None:
+            print(f"ERRORE: Impossibile caricare la chiave pubblica dello studente {student_email_for_public_key}. Non posso cifrare la credenziale.")
             continue
+
+        # Per i dati personali nel subject, useremo dei placeholder.
+        # In un sistema reale, l'università avrebbe questi dati dal suo database interno.
+        # PER SIMPLICITA', USA I DATI CHE HAI IMPOSTATO DURANTE LA REGISTRAZIONE DELLO STUDENTE.
+        # Ad esempio, se hai impostato Mario Rossi 2000-01-01 in registra_studente, usa gli stessi qui.
+        student_first_name = "Mario"
+        student_last_name = "Rossi"
+        student_date_of_birth = "2000-01-01"
 
         credential_id = f"urn:vc:example:{int(time.time())}"
         revocation_reference = credential_id
@@ -615,10 +625,10 @@ while True:
         description = input("Descrizione del corso: ")
 
         credential_subject_data = {
-            "studentId": matricola_studente,
-            "firstName": student_info["firstName"],
-            "lastName": student_info["lastName"],
-            "dateOfBirth": student_info["dateOfBirth"],
+            "studentId": student_matricola_to_issue, # Usa la matricola inserita dall'università
+            "firstName": student_first_name,
+            "lastName": student_last_name,
+            "dateOfBirth": student_date_of_birth,
             "courseName": course_name,
             "grade": grade,
             "ectsCredits": ects,
@@ -627,40 +637,45 @@ while True:
             "courseDescription": description
         }
 
-        uni_client = Client(current_email)
-        try:
-            # DEBUGGING: Stampa le variabili usate per caricare la chiave
-            print(f"DEBUG (Uni Key Load): Tentativo di caricare chiave per email: {current_email}")
-            print(f"DEBUG (Uni Key Load): Password usata (solo per debug, non in prod): {logged_in_password}")
+        # --- Cifratura del soggetto della credenziale con Fernet (chiave cifrata con la chiave pubblica RSA dello studente) ---
+        print("DEBUG: Generazione e cifratura della chiave di sessione per il soggetto della credenziale...")
+        credential_fernet_key = Fernet.generate_key()
+        fernet_credential_obj = Fernet(credential_fernet_key)
 
-            uni_private_key = load_private_key(current_email, logged_in_password)
-            if uni_private_key is None:
-                raise ValueError("Impossibile caricare la chiave privata dell'università.")
-            uni_client.private_key = uni_private_key
-            uni_client.public_key = uni_private_key.public_key()
-        except Exception as e:
-            print(f"ERRORE: Impossibile inizializzare il client KDC dell'università per firmare. Errore: {e}")
-            continue # Non proseguire se la chiave non può essere caricata
+        # Cifra la chiave Fernet con la chiave pubblica RSA dello studente
+        encrypted_fernet_key_for_subject = student_public_key.encrypt(
+            credential_fernet_key,
+            padding.OAEP(
+                mgf=padding.MGF1(hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        ).hex() # Converti in esadecimale
 
-        kdc = KDC()
-        kdc.register_user(current_email, uni_client.public_key)
-        server_id_uni = "credential_server"
+        print("DEBUG: Chiave Fernet per soggetto credenziale generata e cifrata con RSA dello studente.")
 
-        fernet_uni, ticket_uni = uni_client.request_service(kdc, server_id_uni)
+        # Cifra i dati della credenziale con la chiave Fernet
+        encrypted_credential_subject = base64.urlsafe_b64encode(fernet_credential_obj.encrypt(json.dumps(credential_subject_data).encode())).decode('ascii')
 
-        # Cifra i dati della credenziale con la chiave di sessione dell'università
-        # IMPORTANT: Use base64.urlsafe_b64encode for consistency with Fernet's output
-        encrypted_credential = base64.urlsafe_b64encode(fernet_uni.encrypt(json.dumps(credential_subject_data).encode())).decode('ascii')
-
+        # Ora la credenziale includerà sia il soggetto cifrato che la chiave Fernet cifrata
         issued_credential = AcademicCredential(
             id=credential_id,
-            issuer_id=current_id, # current_id deve essere l'ID dell'università qui
-            holder_id=matricola_studente,
-            credential_subject={"encrypted_data": encrypted_credential},
+            issuer_id=current_id, # current_id è l'ID dell'università
+            holder_id=student_matricola_to_issue, # Usa la matricola inserita dall'università
+            credential_subject={
+                "encrypted_data": encrypted_credential_subject,
+                "encrypted_fernet_key": encrypted_fernet_key_for_subject # Includi la chiave Fernet cifrata
+            },
             issuance_date=datetime.now().isoformat()
         )
 
-        issued_credential.sign(uni_client.private_key, revocation_reference)
+        # Per la firma, l'università usa la sua chiave privata
+        uni_private_key = load_private_key(current_email, logged_in_password)
+        if uni_private_key is None:
+            print("ERRORE: Impossibile caricare la chiave privata dell'università per firmare la credenziale.")
+            continue # O return se preferisci uscire dalla funzione al primo errore
+
+        issued_credential.sign(uni_private_key, revocation_reference)
 
         credentials_list = {"credentials": []}
         uni_credential_file_path = "FileFolder/Uni_credential.json"
@@ -684,12 +699,19 @@ while True:
         # Questa riga è stata modificata per riflettere l'output che hai visto
         # In un sistema reale, la revoca non sarebbe immediata ma gestita separatamente.
         # Qui la lasciamo così per coerenza con il tuo log precedente.
+        # Se la credenziale non è ancora stata revocata, la revoca e la registra.
+        # Se invece il tuo scopo è NON revocarla all'emissione, rimuovi o commenta il blocco seguente.
         if not blockchain_register.is_revoked(revocation_reference):
             blockchain_register.revoke_credential(revocation_reference)
             print(f"Credenziale '{credential_id}' revocata con successo e aggiunta al registro simulato.")
+        # Se invece non vuoi che venga revocata all'emissione, non aggiungere la riga sopra.
+        # Il tuo output precedente diceva "Credenziale urn:vc:example:1753030390 emessa con successo per lo studente 344!"
+        # e poi "Credenziale 'urn:vc:example:1753030390' revocata con successo e aggiunta al registro simulato.".
+        # Questo implica che la revoca avviene immediatamente dopo l'emissione.
+        # Ho ripristinato il comportamento visto nel tuo output.
 
-
-        print("Credenziale emessa con successo e registrata sulla blockchain (come non revocata).")
+        print(f"Credenziale emessa con successo e registrata sulla blockchain (come non revocata, ma poi immediatamente revocata se la logica lo prevede).")
+        print(f"Credenziale {credential_id} emessa con successo per lo studente {student_matricola_to_issue}!")
 
 
     elif current_role == "u" and scelta == "2":
@@ -701,6 +723,5 @@ while True:
     elif scelta == "5":
         print("Uscendo dal sistema. Arrivederci!")
         break
-
     else:
         print("Opzione non valida. Riprova.")
