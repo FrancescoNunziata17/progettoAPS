@@ -1,13 +1,15 @@
 import json
 from datetime import datetime, timezone
 import hashlib
+import os # Necessario per os.makedirs e os.path.join
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.backends import default_backend # Necessario per specificare il backend
 
-# Importa la classe MerkleTree dal file merkle_tree.py (che definiremo dopo)
+# Importa la classe MerkleTree dal file merkle_tree.py
 # Assicurati che merkle_tree.py sia nella stessa directory o nel PYTHONPATH
 from merkle_tree import MerkleTree
 
@@ -109,7 +111,11 @@ class AcademicCredential:
         try:
             signature = bytes.fromhex(self.proof["signature"])
             merkle_root_hash = self.proof["merkleRootHash"]
-            revocation_reference = self.proof["revocationMechanism"]["reference"]
+            # Assicurati che revocationMechanism e reference esistano nel proof
+            revocation_reference = self.proof.get("revocationMechanism", {}).get("reference")
+            if not revocation_reference:
+                print("DEBUG ERRORE: Riferimento di revoca mancante nel proof.")
+                return False
 
             data_to_verify_hash = self.get_credential_hash_for_signing(merkle_root_hash, revocation_reference)
 
@@ -124,9 +130,10 @@ class AcademicCredential:
             )
             return True
         except InvalidSignature:
+            print("DEBUG ERRORE: Firma non valida.")
             return False
         except Exception as e:
-            print(f"Errore durante la verifica della firma: {e}")
+            print(f"DEBUG ERRORE: Eccezione durante la verifica della firma: {e}")
             return False
 
     def to_dict(self) -> dict:
@@ -164,18 +171,33 @@ class AcademicCredential:
         credential.proof = data.get("proof", {})
         return credential
 
-# Funzioni per la gestione delle chiavi (per l'università emittente)
+
 def generate_key_pair():
     """Genera una nuova coppia di chiavi RSA."""
     private_key = rsa.generate_private_key(
         public_exponent=65537,
-        key_size=2048
+        key_size=2048,
+        backend=default_backend()
     )
     public_key = private_key.public_key()
     return private_key, public_key
 
-def save_private_key(private_key: rsa.RSAPrivateKey, filename: str, password: str = None):
-    """Salva la chiave privata su file (cifrata opzionalmente con password)."""
+def save_private_key(private_key: rsa.RSAPrivateKey, email: str, password: str = None):
+    """
+    Salva la chiave privata in un file PEM cifrato nella directory 'keys/'.
+    Crea la directory 'keys' se non esiste.
+
+    Args:
+        private_key (rsa.RSAPrivateKey): La chiave privata da salvare.
+        email (str): L'email dell'utente, usata per il nome del file della chiave.
+        password (str, optional): La password per cifrare la chiave privata. Defaults to None (no encryption).
+    """
+    keys_dir = "keys"
+    os.makedirs(keys_dir, exist_ok=True) # Crea la directory 'keys' se non esiste
+
+    # Costruisci il percorso completo del file all'interno di 'keys/'
+    filename = os.path.join(keys_dir, f"{email}_private.pem")
+
     encryption_algorithm = serialization.BestAvailableEncryption(password.encode()) if password else serialization.NoEncryption()
     with open(filename, "wb") as f:
         f.write(private_key.private_bytes(
@@ -183,26 +205,69 @@ def save_private_key(private_key: rsa.RSAPrivateKey, filename: str, password: st
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=encryption_algorithm
         ))
+    print(f"DEBUG (credential): Chiave privata salvata in {filename}")
 
-def load_private_key(filename: str, password: str = None) -> rsa.RSAPrivateKey:
-    """Carica una chiave privata da file."""
+def load_private_key(email: str, password: str = None) -> rsa.RSAPrivateKey:
+    """
+    Carica una chiave privata da un file PEM cifrato dalla directory 'keys/'.
+
+    Args:
+        email (str): L'email dell'utente, usata per trovare il file della chiave.
+        password (str, optional): La password per decifrare la chiave privata. Defaults to None.
+
+    Returns:
+        rsa.RSAPrivateKey: La chiave privata caricata, o None se il file non è trovato.
+    """
+    filename = os.path.join("keys", f"{email}_private.pem")
+    if not os.path.exists(filename):
+        print(f"DEBUG ERRORE (credential): File chiave privata NON trovato: {filename}")
+        return None
     with open(filename, "rb") as f:
         private_key = serialization.load_pem_private_key(
             f.read(),
-            password=password.encode() if password else None
+            password=password.encode() if password else None,
+            backend=default_backend()
         )
+    print(f"DEBUG (credential): Chiave privata caricata da {filename}")
     return private_key
 
-def save_public_key(public_key: rsa.RSAPublicKey, filename: str):
-    """Salva la chiave pubblica su file."""
+def save_public_key(public_key: rsa.RSAPublicKey, email: str):
+    """
+    Salva la chiave pubblica su file nella directory 'keys/'.
+    Crea la directory 'keys' se non esiste.
+
+    Args:
+        public_key (rsa.RSAPublicKey): La chiave pubblica da salvare.
+        email (str): L'email dell'utente, usata per il nome del file della chiave.
+    """
+    keys_dir = "keys"
+    os.makedirs(keys_dir, exist_ok=True) # Crea la directory 'keys' se non esiste
+
+    # Costruisci il percorso completo del file all'interno di 'keys/'
+    filename = os.path.join(keys_dir, f"{email}_public.pem")
+
     with open(filename, "wb") as f:
         f.write(public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         ))
+    print(f"DEBUG (credential): Chiave pubblica salvata in {filename}")
 
-def load_public_key(filename: str) -> rsa.RSAPublicKey:
-    """Carica una chiave pubblica da file."""
+def load_public_key(email: str) -> rsa.RSAPublicKey:
+    """
+    Carica una chiave pubblica da file dalla directory 'keys/'.
+
+    Args:
+        email (str): L'email dell'utente, usata per trovare il file della chiave.
+
+    Returns:
+        rsa.RSAPublicKey: La chiave pubblica caricata, o None se il file non è trovato.
+    """
+    filename = os.path.join("keys", f"{email}_public.pem")
+    if not os.path.exists(filename):
+        print(f"DEBUG ERRORE (credential): File chiave pubblica NON trovato: {filename}")
+        return None
     with open(filename, "rb") as f:
-        public_key = serialization.load_pem_public_key(f.read())
+        public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
+    print(f"DEBUG (credential): Chiave pubblica caricata da {filename}")
     return public_key
