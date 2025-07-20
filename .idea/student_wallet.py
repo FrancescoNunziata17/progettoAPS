@@ -5,9 +5,8 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 
-# Assicurati di importare KDC, Client, Server da dove si trovano
-from KDC import KDC, Client, Server
-from credential import load_private_key, load_public_key # Assumi che queste funzioni siano qui o in credential.py
+# Assicurati che queste funzioni siano correttamente accessibili
+from credential import load_private_key, load_public_key
 
 class StudentWallet:
     def __init__(self, student_matricola):
@@ -17,14 +16,15 @@ class StudentWallet:
         self.wallet_file_path = "" # Verrà impostato in load_student_data_and_credentials
 
     def _get_wallet_path(self, student_email):
-        # Assicurati che la cartella esista
-        os.makedirs("FileFolder", exist_ok=True)
-        return os.path.join("FileFolder", f"student_wallet_{student_email}.json")
+        # Usiamo una cartella 'wallets' per i file dei wallet degli studenti
+        # per distinguerli dai file delle credenziali emesse dall'università in 'FileFolder'.
+        os.makedirs("wallets", exist_ok=True)
+        return os.path.join("wallets", f"{student_email}_wallet.json")
 
     def load_student_data_and_credentials(self, student_email, password):
         """
         Carica i dati personali e le credenziali dello studente.
-        Se non esistono, li decifra da users.json e li salva nel wallet.
+        Se il wallet non esiste o è corrotto, li decifra da users.json e li salva nel wallet.
         """
         self.wallet_file_path = self._get_wallet_path(student_email)
 
@@ -35,6 +35,10 @@ class StudentWallet:
                     wallet_data = json.load(f)
                     self.personal_data = wallet_data.get('personal_data', {})
                     self.credentials = wallet_data.get('credentials', [])
+                    # Se la matricola nel wallet caricato è diversa da quella inizializzata, aggiorna
+                    if self.student_matricola == "" and self.personal_data.get('matricola'):
+                        self.student_matricola = self.personal_data.get('matricola')
+
                     print(f"DEBUG (StudentWallet): Dati caricati dal wallet esistente: {self.wallet_file_path}")
                     return True
             except json.JSONDecodeError as e:
@@ -67,47 +71,46 @@ class StudentWallet:
             return False
 
         try:
-            client_wallet = Client(student_email)
             private_key = load_private_key(student_email, password)
             if private_key is None:
                 raise ValueError(f"Impossibile caricare la chiave privata per {student_email}.")
 
-            client_wallet.private_key = private_key
-            client_wallet.public_key = private_key.public_key()
+            # Decifra la chiave Fernet usando la chiave privata RSA dello studente
+            encrypted_fernet_key_hex = user_data_from_json["personal_data_encrypted"]["encrypted_fernet_key"]
+            encrypted_fernet_key_bytes = bytes.fromhex(encrypted_fernet_key_hex)
 
-            kdc = KDC()
-            kdc.register_user(student_email, client_wallet.public_key)
+            personal_data_fernet_key = private_key.decrypt(
+                encrypted_fernet_key_bytes,
+                padding.OAEP(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
+            )
+            fernet_personal_data = Fernet(personal_data_fernet_key)
+            print("DEBUG (StudentWallet): Chiave Fernet per dati personali decifrata con successo.")
 
-            # Il server che ha emesso i dati personali è "registration_server"
-            server_id_personal_data = "registration_server"
-            fernet_personal_data_obj, ticket_personal_data = client_wallet.request_service(kdc, server_id_personal_data)
-
-            # Verifica il ticket con un'istanza Server (simulando il comportamento di un server reale)
-            data_server_personal = Server(server_id_personal_data)
-            success_personal, _ = data_server_personal.handle_client_request(kdc, ticket_personal_data['data'], ticket_personal_data['signature'])
-
-            if not success_personal:
-                raise ValueError("Verifica ticket fallita per dati personali.")
-
-            # Decifra i dati personali
-            # IMPORTANT: Use base64.urlsafe_b64decode here for data encrypted by Fernet
+            # Decifra i dati personali usando la chiave Fernet
             self.personal_data = {
-                "matricola": fernet_personal_data_obj.decrypt(base64.urlsafe_b64decode(user_data_from_json["student_id"]["encrypted_data"])).decode('utf-8'),
-                "nome": fernet_personal_data_obj.decrypt(base64.urlsafe_b64decode(user_data_from_json["nome"]["encrypted_data"])).decode('utf-8'),
-                "cognome": fernet_personal_data_obj.decrypt(base64.urlsafe_b64decode(user_data_from_json["cognome"]["encrypted_data"])).decode('utf-8'),
-                "data_nascita": fernet_personal_data_obj.decrypt(base64.urlsafe_b64decode(user_data_from_json["data_nascita"]["encrypted_data"])).decode('utf-8')
+                "email": student_email, # Aggiungiamo l'email qui per coerenza
+                "matricola": fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_from_json["personal_data_encrypted"]["matricola"])).decode('utf-8'),
+                "nome": fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_from_json["personal_data_encrypted"]["nome"])).decode('utf-8'),
+                "cognome": fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_from_json["personal_data_encrypted"]["cognome"])).decode('utf-8'),
+                "data_nascita": fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_from_json["personal_data_encrypted"]["data_nascita"])).decode('utf-8')
             }
+            # Aggiorna la matricola interna del wallet
+            self.student_matricola = self.personal_data["matricola"]
             print(f"DEBUG (StudentWallet): Dati personali decifrati e caricati per {student_email}.")
 
             # 3. Salva i dati decifrati nel file wallet
-            self._save_wallet_data()
+            self.save_wallet_to_file()
             return True
 
         except Exception as e:
             print(f"ERRORE (StudentWallet): Errore durante la decifratura o il salvataggio del wallet per {student_email}: {e}")
             return False
 
-    def _save_wallet_data(self):
+    def save_wallet_to_file(self):
         """Salva i dati correnti del wallet nel file."""
         try:
             with open(self.wallet_file_path, 'w') as f:
@@ -135,15 +138,16 @@ class StudentWallet:
             for cred in self.credentials:
                 print(f"ID Credenziale: {cred.get('id', 'N/A')}")
                 print(f"  Emittente: {cred.get('issuer_id', 'N/A')}")
-                # Tentativo di decifrare il subject per la visualizzazione, se cifrato
+                print(f"  Titolare (Matricola): {cred.get('holder', {}).get('id', 'N/A')}")
+
+                # Il credential_subject dovrebbe essere già decifrato da retrieve_and_add_credentials_to_wallet
                 subject = cred.get('credential_subject', {})
-                if isinstance(subject, dict) and "encrypted_data" in subject:
-                    print(f"  Soggetto (Cifrato): {subject['encrypted_data']}")
-                    # Qui potresti voler decifrare per visualizzazione, se hai la chiave di sessione
-                    # Ad esempio, per la visualizzazione, potresti aver bisogno di una chiave specifica.
-                    # Per ora mostriamo solo il campo cifrato come debug.
+                if isinstance(subject, dict):
+                    print(f"  Soggetto:")
+                    for sub_key, sub_value in subject.items():
+                        print(f"    {sub_key}: {sub_value}")
                 else:
-                    print(f"  Soggetto: {json.dumps(subject, indent=2)}")
+                    print(f"  Soggetto: {subject}") # Nel caso fosse una stringa o altro
                 print(f"  Data Emissione: {cred.get('issuance_date', 'N/A')}")
                 print("-" * 20)
         else:
@@ -151,12 +155,49 @@ class StudentWallet:
 
     def add_credential(self, credential_dict):
         """Aggiunge una nuova credenziale al wallet."""
-        self.credentials.append(credential_dict)
-        # Il salvataggio deve avvenire esplicitamente dopo l'aggiunta.
-        print(f"DEBUG (StudentWallet): Credenziale aggiunta al wallet. Ricorda di salvare il wallet.")
+        # Aggiungo un controllo per evitare duplicati basato sull'ID della credenziale
+        if not any(c.get('id') == credential_dict.get('id') for c in self.credentials):
+            self.credentials.append(credential_dict)
+            print(f"DEBUG (StudentWallet): Credenziale {credential_dict.get('id')} aggiunta al wallet.")
+        else:
+            print(f"DEBUG (StudentWallet): Credenziale {credential_dict.get('id')} già presente. Non aggiunta.")
+        # Il salvataggio deve avvenire esplicitamente dopo l'aggiunta (gestito nel main)
 
     def generate_selective_presentation(self, credential_id, attributes_to_reveal):
-        """Genera una presentazione selettiva di una credenziale."""
-        # Implementazione futura per la presentazione selettiva
-        print(f"DEBUG (StudentWallet): Implementazione per presentazione selettiva per credenziale {credential_id} e attributi {attributes_to_reveal} da sviluppare.")
-        return {"status": "Not Implemented Yet"}
+        """
+        Genera una presentazione selettiva di una credenziale.
+        Gli attributi sono già decifrati nel wallet.
+        """
+        target_credential = None
+        for cred in self.credentials:
+            if cred.get('id') == credential_id:
+                target_credential = cred
+                break
+
+        if not target_credential:
+            raise ValueError(f"Credenziale con ID '{credential_id}' non trovata nel wallet.")
+
+        original_subject = target_credential.get('credential_subject', {})
+        if not isinstance(original_subject, dict):
+            raise ValueError("Il soggetto della credenziale non è un dizionario valido.")
+
+        revealed_attributes = {}
+        for attr in attributes_to_reveal:
+            if attr in original_subject:
+                revealed_attributes[attr] = original_subject[attr]
+            else:
+                print(f"AVVISO: Attributo '{attr}' non trovato nel soggetto della credenziale {credential_id}.")
+
+        # Crea una nuova credenziale parziale per la presentazione
+        selective_presentation = {
+            "id": f"presentation:{credential_id}",
+            "type": ["VerifiablePresentation", "SelectiveDisclosure"],
+            "holder": target_credential.get("holder"),
+            "issuer": target_credential.get("issuer_id"),
+            "issuance_date": datetime.now().isoformat(),
+            "credential_subject_revealed": revealed_attributes,
+            "original_credential_id": credential_id,
+            "signature": target_credential.get("signature") # Includi la firma originale dell'emittente
+        }
+        print(f"DEBUG (StudentWallet): Presentazione selettiva generata per {credential_id}.")
+        return selective_presentation
