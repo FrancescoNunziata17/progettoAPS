@@ -48,6 +48,88 @@
           "reference": "urn:vc:example:1753121492"
         }
       }
+    },
+    {
+      "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://example.org/credentials/v2"
+      ],
+      "id": "urn:vc:example:1753128684",
+      "type": [
+        "VerifiableCredential",
+        "AcademicCredential"
+      ],
+      "issuer": {
+        "id": "unisa_id"
+      },
+      "issuanceDate": "2025-07-21T22:11:46.446182",
+      "expirationDate": null,
+      "holder": {
+        "id": "718"
+      },
+      "credentialSubject": {
+        "studentId": "718",
+        "firstName": "Francesco",
+        "lastName": "Nunziata",
+        "dateOfBirth": "2002-04-14",
+        "corso_di_laurea": "Ingegneria informatica (magistrale)",
+        "courseName": "Controlli automatici",
+        "grade": "25",
+        "ectsCredits": 9,
+        "issueSemester": "2024-2025/1",
+        "courseCompleted": true,
+        "courseDescription": "ssssssss"
+      },
+      "proof": {
+        "type": "DataIntegrityProof",
+        "signature": "a32d60002e21c832b8cd4024d0ab2506fc40f37ce8ad709f8d9033a30685808d4ee49147b84723a5830e5a06fa6440f54910b0c21f0d0073fe097e6dc62e6e9a7c4ff871217d25a7d2c6c4ae843790b4e595787fe81553e03ce76a01a821a68346d39aefe876930e8bf95f6419ed393d9a95acbc4d896a150148b224fc68d80a59f8b73cc0751001a0c5dbf28bdfcffd1207d78cae6bd7e67e9ed9d0a18a0e62e0e35a3e94d595cac1ced4535169d43f406d42cbc4d5779477a54ba07abcb84312cdd5ffa21a50d15a88eb9762a96e611e905a049803c6f4ee4198e621b35dfc69e7af2202ea03493a9fc0b5f68f17d9e504b569bd239e8b20b38db892e2cea5",
+        "merkleRootHash": "88f16bd7ef6a0c9ed8611baa01d5ece7e5e98717f052bf034f38b4d1a57c4357",
+        "revocationMechanism": {
+          "type": "BlockchainRevocationList",
+          "reference": "urn:vc:example:1753128684"
+        }
+      }
+    },
+    {
+      "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://example.org/credentials/v2"
+      ],
+      "id": "urn:vc:example:1753129279",
+      "type": [
+        "VerifiableCredential",
+        "AcademicCredential"
+      ],
+      "issuer": {
+        "id": "unisa_id"
+      },
+      "issuanceDate": "2025-07-21T22:21:41.253211",
+      "expirationDate": null,
+      "holder": {
+        "id": "718"
+      },
+      "credentialSubject": {
+        "studentId": "718",
+        "firstName": "Francesco",
+        "lastName": "Nunziata",
+        "dateOfBirth": "2002-04-14",
+        "corso_di_laurea": "Ingegneria informatica (magistrale)",
+        "courseName": "APS",
+        "grade": "30",
+        "ectsCredits": 9,
+        "issueSemester": "2024-2025/2",
+        "courseCompleted": true,
+        "courseDescription": "Bello"
+      },
+      "proof": {
+        "type": "DataIntegrityProof",
+        "signature": "ceea866a5437de49f63f8f7312193b41cf93da5286691b0f27e458cc46b46b583c7968d184c3a0e1d82bb9adfbcc3804444f2def2b0eef86bef55bb9a1a2e768d73d660b80a2f651e70e2163037434fe533170c81d1db337b70c3818ada9bc14e89240b43db2b6892772f4e99359e9c9aed8df43bfaa14f925ddeaf98189db544956291686a60074945445aa2b1afeabd665f2ebd74c75524aab3a6572a5fa8a7405cecd92a1b94ec9c2c8841b4737976ba5286f85d7a30960e2ee7bfced094571b8ea71c8b61b3ace511725a1a2733e334f20b4fb7feb65d87da47f25ec9f99e98abc361786b70d18913f39b768cdc32a2b062c79db955e3588715e85cdb55e",
+        "merkleRootHash": "3998156d2fc33f99e7933be836e6cdf31936e3fabba37bdf404f825c19aa25d0",
+        "revocationMechanism": {
+          "type": "BlockchainRevocationList",
+          "reference": "urn:vc:example:1753129279"
+        }
+      }
     }
   ]
 }
