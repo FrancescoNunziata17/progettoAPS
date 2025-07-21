@@ -654,6 +654,7 @@ while True:
                 # Create the directory if it doesn't exist
                 os.makedirs(output_directory, exist_ok=True) # Use exist_ok=True to avoid error if dir exists
 
+
                 issuer_id = selective_presentation.get("issuer").get("id")
                 try:
                     with open('users.json', "r") as f:
