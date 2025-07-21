@@ -129,6 +129,20 @@ def registra_studente():
     global current_email, current_role, current_id
 
     while True:
+        '''
+        nome = input("Inserisci il tuo nome: ")
+        if len(nome) < 2:
+            print("Il nome deve contenere almeno due caratteri.")
+            continue
+
+        cognome = input("Inserisci il tuo cognome: ")
+        if len(cognome) < 2:
+            print("Il cognome deve contenere almeno due caratteri.")
+            continue
+        '''
+
+
+
         email = input("Inserisci la tua email (sarà anche il tuo ID utente): ")
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
             print("Formato email non valido.")
