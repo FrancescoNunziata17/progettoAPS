@@ -1,4 +1,11 @@
 {
+  "personal_data": {
+    "email": "a.pentangelo18@studenti.unisa.it",
+    "matricola": "351",
+    "nome": "Mario",
+    "cognome": "Rossi",
+    "data_nascita": "2000-01-01"
+  },
   "credentials": [
     {
       "@context": [
@@ -19,8 +26,16 @@
         "id": "351"
       },
       "credentialSubject": {
-        "encrypted_data": "Z0FBQUFBQm9mVFJtOW9MYU1TZjdyMm83dnFsaHpCNnItU2lNVjdyM3VNZTFFWnNwTlViaEtCQzlSUUlWVkFqSDJDV3pldjBPdzFwUXdWU3E5Qmp1Z3dybmt2bmlFeFV5WEk5UEVkV2xER1BvX2w3cDJUUlpURU82Z2NSNlBPbFhEa3dKUzJuWFNBZFdoRjR4S3pLcXpDdXZ0MnRMaHJzbEFYTHN6OGZRVlN2VXBBUDJCanRKYUtJOUhudGoxcjBtYmhhaFZ6S2J5VmJQWEdrVWxFNlBYYjVDYUstaEdSQy1QUGg5UXhpc2dFT3kzWEJYNlVTQ24xT09uLUd3YnRTbFI5cUlZbW9GMXd0WTZpZ0xuODB2SV9ndGdLR0c0RGRIa3BDU1JvaER1TW1aMW1GYkFyYzFjd1JmdFJRWUxraGxIeF9wOUhUc1I2LVozdDlpVTdXd2x1TjduLUw0cjNIYk1BaXdjZkk0WG5oSEExT0wyam1UblQ0ampaNkQ4dmpEN0taLXJBU1RZTHowODhfMEN6dU1RV0h4ZENYcTZrUWd0dz09",
-        "encrypted_fernet_key": "6da3eebbe80396f3c39e74b98f942769d8b9fda9aba061b58478f216b35576f500402f1c7bb18c8a74fc4470050d72437f4a23cfb72b751cb2e595914f09bf9919d0f746ae467d3e13c684f8dde6de63861084b3998ba0f5767478764435f762334f8129de8e27c8bd45c2c03aef5a1a247d5c5cdf9eb669cf0f270d2ada39bd71648147c5e3ddea862abb902f752c49ae3ba3b4ca5db348d00529462e8eea3c269f322bf11a9b62b06ec1b750537924ec3f44ecab5bfc782fa601d78e30d84a26e0005fa9dd2435a0808857dceebcbc5670cee4e7d961b6c06c709ae30ef3996feca3aa82bbc1ee3aeb5637623ef871f3423935b73f97f05f49eb5eb80c8b96"
+        "studentId": "351",
+        "firstName": "Mario",
+        "lastName": "Rossi",
+        "dateOfBirth": "2000-01-01",
+        "courseName": "Controlli automatici",
+        "grade": "27",
+        "ectsCredits": 9,
+        "issueSemester": "2022-2023/1",
+        "courseCompleted": true,
+        "courseDescription": "not bad"
       },
       "proof": {
         "type": "DataIntegrityProof",
