@@ -509,24 +509,11 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
                 print(f"ERRORE (main): Impossibile caricare la chiave pubblica dell'emittente {issuer_email} per la verifica della credenziale '{cred_id}'.")
                 continue
 
-            # Crea un oggetto AcademicCredential con i dati COMPLETI (non decifrati per il subject, ma con il proof)
-            # per la verifica della firma. Il subject decifrato non è necessario per la verifica della firma.
-            # Se la verifica della firma include il Merkle root del subject originale, e il subject è cifrato
-            # nel JSON, allora l'oggetto AcademicCredential dovrà prima decifrare il subject per ricalcolare il Merkle root
-            # o usare il Merkle root memorizzato nel "proof" se è quello su cui è stata calcolata la firma.
-            # Assumiamo che il 'merkleRootHash' nel 'proof' sia quello corretto per la verifica.
 
-            # Ricostruisci un oggetto AcademicCredential per la verifica della firma
-            # È fondamentale che i dati usati per la verifica (id, issuer_id, holder_id, issuanceDate, merkleRootHash, revocationReference)
-            # siano ESATTAMENTE gli stessi usati al momento della firma.
             cred_for_verification = AcademicCredential(
                 id=cred_dict.get("id"),
                 issuer_id=cred_dict.get("issuer", {}).get("id"),
                 holder_id=cred_dict.get("holder", {}).get("id"),
-                # Passa qui il credentialSubject completo, anche se cifrato, perché l'oggetto AcademicCredential
-                # utilizzerà il MerkleRootHash dal campo proof o lo ricalcolerà se il subject non è cifrato.
-                # Se il campo `merkleRootHash` nel `proof` è quello che è stato firmato, allora
-                # la presenza o meno del subject decifrato qui non influisce sulla verifica.
                 credential_subject=cred_dict.get("credentialSubject", {}),
                 issuance_date=cred_dict.get("issuanceDate"), # IMPORTANTE: usa "issuanceDate" come nel JSON originale
                 expiration_date=cred_dict.get("expirationDate")
@@ -550,7 +537,7 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
 
             if encrypted_subject and encrypted_fernet_key_for_subject:
                 try:
-                    # Decifra la chiave Fernet specifica per questa credenziale usando la chiave privata RSA dello studente
+                    # Decifro la chiave Fernet specifica per questa credenziale usando la chiave privata RSA dello studente
                     decrypted_fernet_key_bytes = student_private_key.decrypt(
                         bytes.fromhex(encrypted_fernet_key_for_subject),
                         padding.OAEP(
@@ -568,21 +555,10 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
 
                     # Aggiorna il dizionario con il soggetto decifrato
                     cred_dict["credentialSubject"] = decrypted_subject
-                    # Rimuovi la chiave Fernet cifrata e i dati cifrati dal dict per la pulizia del wallet
-                    # Dopo la decifratura, non servono più i campi cifrati nel wallet.
-                    # Ma assicurati di farlo solo se i campi esistono e sono all'interno del subject cifrato originale
-                    # Il campo `encrypted_data` viene rimpiazzato dal `decrypted_subject`
-                    # Il campo `encrypted_fernet_key` dovrebbe essere eliminato dal dict originale, non dal subject decifrato
+
                     if "encrypted_fernet_key" in cred_dict.get("credentialSubject", {}):
                         del cred_dict["credentialSubject"]["encrypted_fernet_key"] # NO, non qui, è nel livello superiore se presente
 
-                    # Questa parte è delicata: il `cred_dict` che stai modificando
-                    # è la copia locale della credenziale dal file.
-                    # Se i campi `encrypted_data` e `encrypted_fernet_key`
-                    # sono *dentro* `credentialSubject` nel JSON come nel tuo `Uni_credential.json`
-                    # allora la riga `cred_dict["credentialSubject"] = decrypted_subject`
-                    # li rimuove implicitamente.
-                    # Se fossero al livello superiore come `cred_dict["encrypted_data"]`, allora andrebbero rimossi esplicitamente.
 
                     is_duplicate = False
                     for existing_cred in student_wallet_obj.credentials:
@@ -834,10 +810,7 @@ while True:
             print(f"ERRORE: Impossibile caricare la chiave pubblica dello studente {student_email_for_public_key}. Non posso cifrare la credenziale.")
             continue
 
-        # Per i dati personali nel subject, useremo dei placeholder.
-        # In un sistema reale, l'università avrebbe questi dati dal suo database interno.
-        # PER SIMPLICITA', USA I DATI CHE HAI IMPOSTATO DURANTE LA REGISTRAZIONE DELLO STUDENTE.
-        # Ad esempio, se hai impostato Mario Rossi 2000-01-01 in registra_studente, usa gli stessi qui.
+
         student_info = get_student_info(student_matricola_to_issue)
         student_first_name = student_info.get("firstName")
         student_last_name = student_info.get("lastName")
@@ -962,22 +935,13 @@ while True:
         with open(uni_credential_file_path, "w") as f:
             json.dump(credentials_list, f, indent=2)
 
-        # La logica di revoca immediata è per test; in produzione sarebbe diversa
-        # Questa riga è stata modificata per riflettere l'output che hai visto
-        # In un sistema reale, la revoca non sarebbe immediata ma gestita separatamente.
-        # Qui la lasciamo così per coerenza con il tuo log precedente.
-        # Se la credenziale non è ancora stata revocata, la revoca e la registra.
-        # Se invece il tuo scopo è NON revocarla all'emissione, rimuovi o commenta il blocco seguente.
+
         '''
         if not blockchain_register.is_revoked(revocation_reference):
             blockchain_register.revoke_credential(revocation_reference)
             print(f"Credenziale '{credential_id}' revocata con successo e aggiunta al registro simulato.")
         '''
-        # Se invece non vuoi che venga revocata all'emissione, non aggiungere la riga sopra.
-        # Il tuo output precedente diceva "Credenziale urn:vc:example:1753030390 emessa con successo per lo studente 344!"
-        # e poi "Credenziale 'urn:vc:example:1753030390' revocata con successo e aggiunta al registro simulato.".
-        # Questo implica che la revoca avviene immediatamente dopo l'emissione.
-        # Ho ripristinato il comportamento visto nel tuo output.
+
 
         print(f"Credenziale emessa con successo e registrata sulla blockchain (come non revocata, ma poi immediatamente revocata se la logica lo prevede).")
         print(f"Credenziale {credential_id} emessa con successo per lo studente {student_matricola_to_issue}!")
