@@ -1,4 +1,12 @@
 {
+  "personal_data": {
+    "email": "fran.ps4@gmail.com",
+    "matricola": "718",
+    "nome": "Francesco",
+    "cognome": "Nunziata",
+    "data_nascita": "2002-04-14",
+    "corso_di_laurea": "Ingegneria informatica (magistrale)"
+  },
   "credentials": [
     {
       "@context": [
@@ -19,8 +27,17 @@
         "id": "718"
       },
       "credentialSubject": {
-        "encrypted_data": "Z0FBQUFBQm9mb0w0MnVoVDU3SGYtTk15UllJb25QRk03R1VFdGszLUJUdWlLMzJYLTVFcDR2YU80SVFKbTJYRmIyNGVYcmoxcW9xcEdlcFZ3NDhUak1CcEhyU3owU0tUbXRHMmJRQlFHOEVWTVQ5Rk9vTzBEWmFWMExHNWVvRlFvZnJHSGJ6MWdMS1BsWmVyWlhrSzZzdkRPMXRvRXUwcy1uREhXdlF3NFVFcldud2xVSTBfREJEc2NGVlFxWUJabjdlVEFIbnZkSmFzSVZrUFJCbm9pZ1JKVHk4NExENkZhOThJeFJKbjFaV2ZMcURXSlc0U0VpRE1WT2tzWk5sdTBra1dhY05GTHdvZzhiQ2JZdWwtaF8xc0lZVG5TUGdXaGNZWlRjRmsyZkVwakhkNm5xdHNuXzFzajdNNW94cTBqTWoxYlpPemt0MEpIWW95RXRCNkhnYUFtcGxVd1pDb3ZNVTI0YVBKZWpiSk1rNE14UXJnOWR1Z0JVWjJ6LUpSaFhrR0RyQ0NfQUtDQ1A2UExCTS1FdE9raklDd0o5OW1rVEhmajNWUzJCN2ZHUXBURVRYc01tNzUxMnhoSXhDREpKczVTSDlhcjFfOVdONEs4SUhSTzFJeGxzNHNUd0NrZGc9PQ==",
-        "encrypted_fernet_key": "17461252fc421c4e1b8067cec4643150c03196b325d6da858cafc5df0cc01c92e85f8f686ca6c7ee078782586356185799618d2b6ed6c4febb170748dab930b285dec69f8a2202a4311e038c7865aaed8f903d4e2594a4bfe2888ee3b6f77ef723bb874ca9f5cde5dc24e1da49479fb86724f5057b9977788b012ac118b7ccfa4946a5cb5c342a5e19c24ef025e65d24175b39d4a12aa0aa4cd5fd71f7924fb9e287d9eddcba83f767ffe17f8deacfa7dde9493a46ac47a44f3402efab6b083ab6d15bcf17bf7ad2689fe8902bce71d7ef8dc59d5339d052c8607547f2bd4c31042bffad0d1356cbce997fc341ad16af400c7c0138eb4b215d148198d484e0af"
+        "studentId": "718",
+        "firstName": "Francesco",
+        "lastName": "Nunziata",
+        "dateOfBirth": "2002-04-14",
+        "corso_di_laurea": "Ingegneria informatica (magistrale)",
+        "courseName": "ASD",
+        "grade": "27",
+        "ectsCredits": 9,
+        "issueSemester": "2023-2024/1",
+        "courseCompleted": true,
+        "courseDescription": "Bello"
       },
       "proof": {
         "type": "DataIntegrityProof",
