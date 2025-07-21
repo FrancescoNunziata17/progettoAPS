@@ -8,7 +8,7 @@ from cryptography.hazmat.backends import default_backend
 # Numero di iterazioni: un valore elevato è cruciale per la sicurezza.
 # Man mano che l'hardware diventa più veloce, questo valore dovrebbe essere aumentato.
 # 600.000 è un buon compromesso tra sicurezza e prestazioni attuali.
-ITERATIONS = 600000
+ITERATIONS = 1200000
 
 # Lunghezza della chiave derivata/hash. Per l'hashing, 32 byte (256 bit) sono standard.
 HASH_LENGTH = 32 # Corrisponde a SHA256

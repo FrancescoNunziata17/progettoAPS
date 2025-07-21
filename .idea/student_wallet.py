@@ -97,7 +97,8 @@ class StudentWallet:
                 "matricola": fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_from_json["personal_data_encrypted"]["matricola"])).decode('utf-8'),
                 "nome": fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_from_json["personal_data_encrypted"]["nome"])).decode('utf-8'),
                 "cognome": fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_from_json["personal_data_encrypted"]["cognome"])).decode('utf-8'),
-                "data_nascita": fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_from_json["personal_data_encrypted"]["data_nascita"])).decode('utf-8')
+                "data_nascita": fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_from_json["personal_data_encrypted"]["data_nascita"])).decode('utf-8'),
+                "corso_di_laurea": fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_from_json["personal_data_encrypted"]["corso_di_laurea"])).decode('utf-8')
             }
             # Aggiorna la matricola interna del wallet
             self.student_matricola = self.personal_data["matricola"]

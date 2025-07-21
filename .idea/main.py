@@ -7,6 +7,7 @@ import os
 import random
 import base64
 
+from datetime import datetime, date
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.exceptions import InvalidSignature
@@ -129,7 +130,7 @@ def registra_studente():
     global current_email, current_role, current_id
 
     while True:
-        '''
+
         nome = input("Inserisci il tuo nome: ")
         if len(nome) < 2:
             print("Il nome deve contenere almeno due caratteri.")
@@ -139,9 +140,34 @@ def registra_studente():
         if len(cognome) < 2:
             print("Il cognome deve contenere almeno due caratteri.")
             continue
-        '''
 
+        corso_di_laurea = input("Inserisci il tuo corso di laurea: ")
+        if len(corso_di_laurea) < 3:
+            print("Il nome del corso di laurea è troppo corto.")
+            continue
 
+        data_nascita = input("Inserisci la tua data di nascita (formato YYYY-MM-DD): ")
+        try:
+            data_obj = datetime.strptime(data_nascita, "%Y-%m-%d").date()
+            oggi = date.today()
+
+            if data_obj > oggi:
+                print("La data di nascita non può essere nel futuro.")
+                continue
+
+            # Calcolo dell'età
+            eta = oggi.year - data_obj.year - ((oggi.month, oggi.day) < (data_obj.month, data_obj.day))
+
+            if eta < 17:
+                print("Devi avere almeno 17 anni per registrarti come studente universitario.")
+                continue
+            elif eta > 100:
+                print("Età non plausibile per uno studente universitario.")
+                continue
+
+        except ValueError:
+            print("Formato data non valido. Usa il formato YYYY-MM-DD.")
+            continue
 
         email = input("Inserisci la tua email (sarà anche il tuo ID utente): ")
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
@@ -214,9 +240,10 @@ def registra_studente():
 
         # Cifratura della matricola e altri dati personali con la chiave Fernet
         encrypted_matricola_data = base64.urlsafe_b64encode(fernet_personal_data.encrypt(matricola.encode())).decode('ascii')
-        encrypted_nome_data = base64.urlsafe_b64encode(fernet_personal_data.encrypt("Mario".encode())).decode('ascii')
-        encrypted_cognome_data = base64.urlsafe_b64encode(fernet_personal_data.encrypt("Rossi".encode())).decode('ascii')
-        encrypted_data_nascita = base64.urlsafe_b64encode(fernet_personal_data.encrypt("2000-01-01".encode())).decode('ascii')
+        encrypted_nome_data = base64.urlsafe_b64encode(fernet_personal_data.encrypt(nome.encode())).decode('ascii')
+        encrypted_cognome_data = base64.urlsafe_b64encode(fernet_personal_data.encrypt(cognome.encode())).decode('ascii')
+        encrypted_data_nascita = base64.urlsafe_b64encode(fernet_personal_data.encrypt(data_nascita.encode())).decode('ascii')
+        encrypted_corso_di_laurea = base64.urlsafe_b64encode(fernet_personal_data.encrypt(corso_di_laurea.encode())).decode('ascii')
 
         user_data = {
             "email": email,
@@ -228,7 +255,8 @@ def registra_studente():
                 "matricola": encrypted_matricola_data,
                 "nome": encrypted_nome_data,
                 "cognome": encrypted_cognome_data,
-                "data_nascita": encrypted_data_nascita
+                "data_nascita": encrypted_data_nascita,
+                "corso_di_laurea": encrypted_corso_di_laurea
             },
             "credentials": [] # Campo per coerenza con StudentWallet, se le credenziali vengono salvate anche qui
         }
@@ -336,6 +364,7 @@ def accedi_utente(user_type: str):
                 decrypted_nome = fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_found["personal_data_encrypted"]["nome"])).decode('utf-8')
                 decrypted_cognome = fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_found["personal_data_encrypted"]["cognome"])).decode('utf-8')
                 decrypted_data_nascita = fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_found["personal_data_encrypted"]["data_nascita"])).decode('utf-8')
+                decrypted_nome = fernet_personal_data.decrypt(base64.urlsafe_b64decode(user_data_found["personal_data_encrypted"]["corso_di_laurea"])).decode('utf-8')
 
 
                 print(f"Accesso studente {email} riuscito! Matr: {current_id}")
@@ -384,7 +413,8 @@ def get_student_info(matricola: str) -> dict:
                                 "firstName": personal_data.get("nome", "N/A"),
                                 "lastName": personal_data.get("cognome", "N/A"),
                                 "dateOfBirth": personal_data.get("data_nascita", "N/A"),
-                                "email": personal_data.get("email", "N/A")
+                                "email": personal_data.get("email", "N/A"),
+                                "corso_di_laurea": personal_data.get("corso_di_laurea", "N/A"),
                             }
                         else:
                             print(f"DEBUG: Matricola {matricola} non corrispondente per wallet {filename}.")
@@ -679,33 +709,69 @@ while True:
         # In un sistema reale, l'università avrebbe questi dati dal suo database interno.
         # PER SIMPLICITA', USA I DATI CHE HAI IMPOSTATO DURANTE LA REGISTRAZIONE DELLO STUDENTE.
         # Ad esempio, se hai impostato Mario Rossi 2000-01-01 in registra_studente, usa gli stessi qui.
-        student_first_name = "Mario"
-        student_last_name = "Rossi"
-        student_date_of_birth = "2000-01-01"
+        student_info = get_student_info(student_matricola_to_issue)
+        student_first_name = student_info.get("firstName")
+        student_last_name = student_info.get("lastName")
+        student_date_of_birth = student_info.get("dateOfBirth")
+        student_course = student_info.get("corso_di_laurea")
 
         credential_id = f"urn:vc:example:{int(time.time())}"
         revocation_reference = credential_id
 
-        print("\nInserisci i dati del corso:")
-        course_name = input("Nome del corso: ")
-        grade = input("Voto: ")
-        ects = int(input("Crediti ECTS: "))
-        semester = input("Semestre (es. 2024-2025/1): ")
-        completed = input("Corso completato? (s/n): ").lower() == 's'
-        description = input("Descrizione del corso: ")
+        while True:
+            print("\nInserisci i dati del corso:")
+
+            course_name = input("Nome del corso: ")
+            if len(course_name.strip()) < 3:
+                print("Il nome del corso deve contenere almeno 3 caratteri.")
+                continue
+
+            grade = input("Voto (es. 28 o 30L): ")
+            if not grade.replace(".", "").replace("L", "").isdigit():
+                print("Il voto deve essere un numero (es. 18, 30, 30L).")
+                continue
+            # Opzionale: puoi decidere se validare il range numerico
+
+            try:
+                ects = int(input("Crediti ECTS: "))
+                if ects <= 0:
+                    print("I crediti ECTS devono essere un numero positivo.")
+                    continue
+            except ValueError:
+                print("I crediti ECTS devono essere un numero intero.")
+                continue
+
+            semester = input("Semestre (formato: YYYY-YYYY/N, es. 2024-2025/1): ")
+            import re
+            if not re.match(r"^\d{4}-\d{4}/[1-2]$", semester):
+                print("Formato semestre non valido. Usa es. 2024-2025/1")
+                continue
+
+            completed_input = input("Corso completato? (s/n): ").strip().lower()
+            if completed_input not in ['s', 'n']:
+                print("Inserisci solo 's' per sì o 'n' per no.")
+                continue
+            completed = completed_input == 's'
+
+            description = input("Descrizione del corso: ")
+            if len(description.strip()) < 5:
+                print("La descrizione è troppo breve.")
+                continue
+            break
 
         credential_subject_data = {
-            "studentId": student_matricola_to_issue, # Usa la matricola inserita dall'università
-            "firstName": student_first_name,
-            "lastName": student_last_name,
-            "dateOfBirth": student_date_of_birth,
-            "courseName": course_name,
-            "grade": grade,
-            "ectsCredits": ects,
-            "issueSemester": semester,
-            "courseCompleted": completed,
-            "courseDescription": description
-        }
+                "studentId": student_matricola_to_issue, # Usa la matricola inserita dall'università
+                "firstName": student_first_name,
+                "lastName": student_last_name,
+                "dateOfBirth": student_date_of_birth,
+                "corso_di_laurea": student_course,
+                "courseName": course_name,
+                "grade": grade,
+                "ectsCredits": ects,
+                "issueSemester": semester,
+                "courseCompleted": completed,
+                "courseDescription": description
+            }
 
         # --- Cifratura del soggetto della credenziale con Fernet (chiave cifrata con la chiave pubblica RSA dello studente) ---
         print("DEBUG: Generazione e cifratura della chiave di sessione per il soggetto della credenziale...")
@@ -771,9 +837,11 @@ while True:
         # Qui la lasciamo così per coerenza con il tuo log precedente.
         # Se la credenziale non è ancora stata revocata, la revoca e la registra.
         # Se invece il tuo scopo è NON revocarla all'emissione, rimuovi o commenta il blocco seguente.
+        '''
         if not blockchain_register.is_revoked(revocation_reference):
             blockchain_register.revoke_credential(revocation_reference)
             print(f"Credenziale '{credential_id}' revocata con successo e aggiunta al registro simulato.")
+        '''
         # Se invece non vuoi che venga revocata all'emissione, non aggiungere la riga sopra.
         # Il tuo output precedente diceva "Credenziale urn:vc:example:1753030390 emessa con successo per lo studente 344!"
         # e poi "Credenziale 'urn:vc:example:1753030390' revocata con successo e aggiunta al registro simulato.".
