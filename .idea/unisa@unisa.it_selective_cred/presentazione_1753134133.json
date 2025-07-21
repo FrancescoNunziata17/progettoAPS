@@ -1,0 +1,29 @@
+{
+  "id": "presentation:urn:vc:example:1753134133",
+  "type": [
+    "VerifiablePresentation",
+    "SelectiveDisclosure"
+  ],
+  "issuer": {
+    "id": "uniren_id"
+  },
+  "issuance_date": "2025-07-21T23:44:19.789233",
+  "expirationDate": null,
+  "holder": {
+    "id": "323"
+  },
+  "credentialSubject": {
+    "encrypted_data": "Z0FBQUFBQm9mclN6NVBZTXl3MHFRbnZucDBCZXNRRUtmb2ZFdmtsT0hjMVNhemllWGFkWC1nOHJ6TGVONUZMLU5iUXZoWDVGNHdRd0RUQmRwa2oxXzdDSi14QmFjUmxvTnFSTjZvTWRPbTA5YUtEY2RwT2pJNHR2VUtqblZNeUhHWEVDdWRudHJxY09aa01nUjVPQktRVEt2aHNWQmJaY1V6VWdhYTJ5ZHZCeEJaQUMySHN0Q1FZPQ==",
+    "encrypted_fernet_key": "53779ca32473dbeb8c471858966a9d5665716d20786a0508e2260ef8f2dcb7deb2940539f061a0168659d7a3aba72aa127a741bb1d281b4fb3d071fa2b7f4821b4576cb56c40a5bb288ee4d1b549dbbdf138be6e7aa7202916fee0c10b846e72e9dd82232987a2639bee851fca74b38b9e05fff47424e75a2cb089029219abfa96e33ad73f4b4737e9460f8672495fa3223df6a17b8e0fe38cf9f3bc965b3e1bd9153b55390a6ace54c2343d3ab30fdb4c28a307282f7b9a191edca747dc7e631966735e81b67222b123ed199f808e90b27b218630a77bb64d6473aba723788e8b294de4b3143c0b33d6fbce4232a2696244ce9bd4327be3910f7bafdf33c325"
+  },
+  "original_credential_id": "urn:vc:example:1753134133",
+  "proof": {
+    "type": "DataIntegrityProof",
+    "signature": "d1f3ea4a679b67adb18de40b1afa762d6b0e65be31fde2be753277ebd4230764445e411b55cf9f38d772b3086c1e58766a58871d487173a1466dc45a8f44f9c9a53191149af1ec63ea2adc222e6fb2416f0e0029f2e1f4ce148f235c1e3d1c5e8567bc6accdfca3e817d21302cd58cbd286d95fc2a8991c695de4069e2e2fb3bf5841b38fbd39f641aa6b535a8b1badd2db9962944934dee8a3d2240282608af150d003bf8d20db26bdd5268ea458b0a7fafcd91155c25ee561761976b9364a66c8e0ea0b0cd65517bb2b0c3fbf7ba028236b63ac6e5dcf5d448dca4f929580ccc52a47ddf2d7964bb9b84e522e9556fa2312735d32ce8d6c0113179d4d2f786",
+    "merkleRootHash": "108d4462d0f09db9eb45625a85f53298f7baa8f6922a2a9dad79a514219550dc",
+    "revocationMechanism": {
+      "type": "BlockchainRevocationList",
+      "reference": "urn:vc:example:1753134133"
+    }
+  }
+}

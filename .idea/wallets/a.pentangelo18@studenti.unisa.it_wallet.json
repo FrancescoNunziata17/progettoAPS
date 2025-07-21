@@ -1,0 +1,94 @@
+{
+  "personal_data": {
+    "email": "a.pentangelo18@studenti.unisa.it",
+    "matricola": "323",
+    "nome": "Alessandro",
+    "cognome": "Pentangelo",
+    "data_nascita": "2002-12-10",
+    "corso_di_laurea": "Ing. informatica"
+  },
+  "credentials": [
+    {
+      "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://example.org/credentials/v2"
+      ],
+      "id": "urn:vc:example:1753134026",
+      "type": [
+        "VerifiableCredential",
+        "AcademicCredential"
+      ],
+      "issuer": {
+        "id": "unisa_id"
+      },
+      "issuanceDate": "2025-07-21T23:40:44.976713",
+      "expirationDate": null,
+      "holder": {
+        "id": "323"
+      },
+      "credentialSubject": {
+        "studentId": "323",
+        "firstName": "Alessandro",
+        "lastName": "Pentangelo",
+        "dateOfBirth": "2002-12-10",
+        "corso_di_laurea": "Ing. informatica",
+        "courseName": "ASD",
+        "grade": "28",
+        "ectsCredits": 9,
+        "issueSemester": "2024-2025/1",
+        "courseCompleted": true,
+        "courseDescription": "Bellissimo"
+      },
+      "proof": {
+        "type": "DataIntegrityProof",
+        "signature": "acf604f4143cf64046ec82c1106516fcfb557dbb66dcca731a41d24be3ef06b15db54b36ac728317e08e96b13bdf095763bbbc2ffc7b7d4139f8c5add845adaf080e77b86b5306b3ab1d3b7f61d8339e60200731db6a301654fecaa44067a1ef8322ed397ded1434586e02e8889e1a309ace087150318967a209e492c854e6a2dfb6301e9234d5bc06c23608e8ff5ccee4d8932bbef8696028b32db8e177052fa12cbde6cba1ea674062071e948efa56c4412e54576d76e87bb7e9d04e88f961d612f43399c09088f197615659c0d59dc31a04877768b23642cb574d29f9603b930a58985155d7c43b372c52463dfb7a0103db30061d6d4020a763317030184d",
+        "merkleRootHash": "90c4f8b1dd2ebf63a498d202a2b7bfe006b961a1cbcda273e730e1da08a98b9d",
+        "revocationMechanism": {
+          "type": "BlockchainRevocationList",
+          "reference": "urn:vc:example:1753134026"
+        }
+      }
+    },
+    {
+      "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://example.org/credentials/v2"
+      ],
+      "id": "urn:vc:example:1753134133",
+      "type": [
+        "VerifiableCredential",
+        "AcademicCredential"
+      ],
+      "issuer": {
+        "id": "uniren_id"
+      },
+      "issuanceDate": "2025-07-21T23:42:30.699674",
+      "expirationDate": null,
+      "holder": {
+        "id": "323"
+      },
+      "credentialSubject": {
+        "studentId": "323",
+        "firstName": "Alessandro",
+        "lastName": "Pentangelo",
+        "dateOfBirth": "2002-12-10",
+        "corso_di_laurea": "Ing. informatica",
+        "courseName": "Controlli automatici",
+        "grade": "26",
+        "ectsCredits": 9,
+        "issueSemester": "2024-2025/1",
+        "courseCompleted": true,
+        "courseDescription": "Ottimo"
+      },
+      "proof": {
+        "type": "DataIntegrityProof",
+        "signature": "d1f3ea4a679b67adb18de40b1afa762d6b0e65be31fde2be753277ebd4230764445e411b55cf9f38d772b3086c1e58766a58871d487173a1466dc45a8f44f9c9a53191149af1ec63ea2adc222e6fb2416f0e0029f2e1f4ce148f235c1e3d1c5e8567bc6accdfca3e817d21302cd58cbd286d95fc2a8991c695de4069e2e2fb3bf5841b38fbd39f641aa6b535a8b1badd2db9962944934dee8a3d2240282608af150d003bf8d20db26bdd5268ea458b0a7fafcd91155c25ee561761976b9364a66c8e0ea0b0cd65517bb2b0c3fbf7ba028236b63ac6e5dcf5d448dca4f929580ccc52a47ddf2d7964bb9b84e522e9556fa2312735d32ce8d6c0113179d4d2f786",
+        "merkleRootHash": "108d4462d0f09db9eb45625a85f53298f7baa8f6922a2a9dad79a514219550dc",
+        "revocationMechanism": {
+          "type": "BlockchainRevocationList",
+          "reference": "urn:vc:example:1753134133"
+        }
+      }
+    }
+  ]
+}
