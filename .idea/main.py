@@ -129,6 +129,20 @@ def registra_studente():
     global current_email, current_role, current_id
 
     while True:
+        '''
+        nome = input("Inserisci il tuo nome: ")
+        if len(nome) < 2:
+            print("Il nome deve contenere almeno due caratteri.")
+            continue
+
+        cognome = input("Inserisci il tuo cognome: ")
+        if len(cognome) < 2:
+            print("Il cognome deve contenere almeno due caratteri.")
+            continue
+        '''
+
+
+
         email = input("Inserisci la tua email (sarà anche il tuo ID utente): ")
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
             print("Formato email non valido.")
@@ -561,6 +575,7 @@ while True:
     elif current_role == "u":
         print("1. Emetti credenziale")
         print("2. Revoca credenziale")
+        print("3. Visualizza credenziali selettive")
     print("5. Esci")
 
     scelta = input("Scegli un'opzione: ")
@@ -774,6 +789,62 @@ while True:
         revocation_reference = input("Inserisci il riferimento della credenziale da revocare: ")
         blockchain_register.revoke_credential(revocation_reference)
         print(f"Credenziale con riferimento '{revocation_reference}' revocata con successo.")
+
+    elif current_role == "u" and scelta == "3":
+        print("\n--- Visualizza Credenziali Selettive ---")
+        directory_path = os.path.join(os.getcwd(), current_email + "_selective_cred")
+        if not os.path.exists(directory_path):
+            print(f"Nessuna credenziale selettiva trovata. La cartella '{directory_path}' non esiste.")
+        else:
+            files = [f for f in os.listdir(directory_path) if f.endswith(".json")]
+            if not files:
+                print(f"Nessuna credenziale selettiva trovata nella cartella '{directory_path}'.")
+            else:
+                print(f"\nTrovate {len(files)} credenziali selettive nella cartella '{directory_path}':\n")
+                for file_name in files:
+                    file_path = os.path.join(directory_path, file_name)
+                    try:
+                        with open(file_path, 'r') as f:
+                            data = json.load(f)
+                            print(f"\n--- {file_name} ---")
+                        if(blockchain_register.is_revoked(data["original_credential_id"])):
+                            print(f"Credenziale {data["id"]} che fa riferimento a una credenziale revocata.\nRimozione in corso.")
+                            os.remove(file_path)
+                            continue
+                        encrypted_session_key = data["credentialSubject"]["encrypted_fernet_key"]
+                        encrypted_data = data["credentialSubject"]["encrypted_data"]
+                        #print(f"Encrypted session key: {encrypted_session_key}")
+                        #print(f"Encrypted data: {encrypted_data}")
+                        private_key = load_private_key(current_email, logged_in_password)
+                        if private_key is None:
+                            raise ValueError(f"Impossibile caricare la chiave privata per {current_email}.")
+
+                        # Decodifica da base64
+                        encrypted_session_key_b = bytes.fromhex(encrypted_session_key)
+                        # Decrittazione della chiave di sessione
+                        data_session_key = private_key.decrypt(
+                            encrypted_session_key_b,
+                            padding.OAEP(
+                                mgf=padding.MGF1(hashes.SHA256()),
+                                algorithm=hashes.SHA256(),
+                                label=None
+                            )
+                        )
+                        fernet_credential_obj = Fernet(data_session_key)
+                        print("DEBUG (main): Chiave Fernet per dati personali decifrata con successo.")
+                        decrypted_data_bytes = fernet_credential_obj.decrypt(base64.urlsafe_b64decode(encrypted_data))
+                        decrypted_data = json.loads(decrypted_data_bytes.decode('utf-8'))
+                        #print(f"Decrypted data: {decrypted_data}")
+                        data["credentialSubject"]["encrypted_data"] = decrypted_data["credentialSubject"]["encrypted_data"]
+                        print(f"Credenziale selettiva con ID {data["proof"]["revocationMechanism"]["reference"]}")
+                        print(json.dumps(data, indent=2))
+
+                    except json.JSONDecodeError as e:
+                        print(f"ATTENZIONE: Il file '{file_name}' non è un JSON valido: {e}")
+                    except Exception as e:
+                        print(f"Errore durante la lettura del file '{file_name}': {e}")
+            if not os.path.exists(directory_path):
+                print(f"Nessuna credenziale selettiva trovata. La cartella '{directory_path}' non esiste.")
 
     elif scelta == "5":
         print("Uscendo dal sistema. Arrivederci!")
