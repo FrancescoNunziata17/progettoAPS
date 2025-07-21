@@ -34,6 +34,7 @@ def registra_universita():
     """
     # Validazione nome università
     while True:
+        print("Registrazione utente")
         nome = input("Inserisci il nome dell'università: ")
         if len(nome) < 2 or not nome.replace(" ", "").isalpha():
             print("Il nome deve contenere almeno 2 caratteri e solo lettere.")
@@ -130,15 +131,15 @@ def registra_studente():
     global current_email, current_role, current_id
 
     while True:
-
+        print("Registrazione utente")
         nome = input("Inserisci il tuo nome: ")
-        if len(nome) < 2:
-            print("Il nome deve contenere almeno due caratteri.")
+        if len(nome) < 2 or not nome.replace(" ", "").isalpha():
+            print("Il nome deve contenere almeno due caratteri e non deve contenere numeri.")
             continue
 
         cognome = input("Inserisci il tuo cognome: ")
-        if len(cognome) < 2:
-            print("Il cognome deve contenere almeno due caratteri.")
+        if len(cognome) < 2 or not cognome.replace(" ", "").isalpha():
+            print("Il cognome deve contenere almeno due caratteri e non deve contenere numeri.")
             continue
 
         corso_di_laurea = input("Inserisci il tuo corso di laurea: ")
@@ -435,6 +436,7 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
     """
     Recupera le credenziali emesse dall'università per lo studente specificato,
     le decifra usando l'approccio ibrido RSA/Fernet e le aggiunge al wallet dello studente.
+    Prima di aggiungere, verifica la firma digitale della credenziale.
     """
     print(f"DEBUG (main): Tentativo di recuperare credenziali per {student_email}...")
     uni_credential_file_path = "FileFolder/Uni_credential.json"
@@ -473,11 +475,74 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
 
     for i, cred_dict in enumerate(emitted_credentials):
         cred_holder_id = cred_dict.get("holder", {}).get("id")
+        cred_id = cred_dict.get('id')
+        cred_issuer_id = cred_dict.get("issuer", {}).get("id") # Ottieni l'ID dell'emittente
 
-        print(f"DEBUG (main): Esaminando credenziale {i+1}/{len(emitted_credentials)}: ID={cred_dict.get('id')}, Holder_ID nel file Uni: {cred_holder_id}")
+        print(f"DEBUG (main): Esaminando credenziale {i+1}/{len(emitted_credentials)}: ID={cred_id}, Holder_ID nel file Uni: {cred_holder_id}")
 
         if str(cred_holder_id) == str(student_wallet_obj.student_matricola):
-            print(f"DEBUG (main): Trovata corrispondenza matricola per credenziale {cred_dict.get('id')}.")
+            print(f"DEBUG (main): Trovata corrispondenza matricola per credenziale {cred_id}.")
+
+            # --- VERIFICA DELLA FIRMA PRIMA DELLA DECIFRATURA (O DOPO AVER COSTRUITO L'OGGETTO) ---
+            # Trova l'email dell'emittente per caricare la sua chiave pubblica
+            issuer_email = None
+            try:
+                with open('users.json', "r") as f:
+                    for line in f:
+                        try:
+                            utente = json.loads(line)
+                            if utente.get("university_id") == cred_issuer_id and utente.get("role") == "u":
+                                issuer_email = utente.get("email")
+                                break
+                        except json.JSONDecodeError:
+                            continue
+            except Exception as e:
+                print(f"ERRORE (main): Errore durante la ricerca dell'email dell'emittente '{cred_issuer_id}': {e}")
+                continue # Salta questa credenziale se non trovo l'emittente
+
+            if issuer_email is None:
+                print(f"ERRORE (main): Impossibile trovare l'email dell'emittente originale con ID '{cred_issuer_id}'. Impossibile verificare la firma per '{cred_id}'.")
+                continue
+
+            issuer_public_key = load_public_key(issuer_email)
+            if issuer_public_key is None:
+                print(f"ERRORE (main): Impossibile caricare la chiave pubblica dell'emittente {issuer_email} per la verifica della credenziale '{cred_id}'.")
+                continue
+
+            # Crea un oggetto AcademicCredential con i dati COMPLETI (non decifrati per il subject, ma con il proof)
+            # per la verifica della firma. Il subject decifrato non è necessario per la verifica della firma.
+            # Se la verifica della firma include il Merkle root del subject originale, e il subject è cifrato
+            # nel JSON, allora l'oggetto AcademicCredential dovrà prima decifrare il subject per ricalcolare il Merkle root
+            # o usare il Merkle root memorizzato nel "proof" se è quello su cui è stata calcolata la firma.
+            # Assumiamo che il 'merkleRootHash' nel 'proof' sia quello corretto per la verifica.
+
+            # Ricostruisci un oggetto AcademicCredential per la verifica della firma
+            # È fondamentale che i dati usati per la verifica (id, issuer_id, holder_id, issuanceDate, merkleRootHash, revocationReference)
+            # siano ESATTAMENTE gli stessi usati al momento della firma.
+            cred_for_verification = AcademicCredential(
+                id=cred_dict.get("id"),
+                issuer_id=cred_dict.get("issuer", {}).get("id"),
+                holder_id=cred_dict.get("holder", {}).get("id"),
+                # Passa qui il credentialSubject completo, anche se cifrato, perché l'oggetto AcademicCredential
+                # utilizzerà il MerkleRootHash dal campo proof o lo ricalcolerà se il subject non è cifrato.
+                # Se il campo `merkleRootHash` nel `proof` è quello che è stato firmato, allora
+                # la presenza o meno del subject decifrato qui non influisce sulla verifica.
+                credential_subject=cred_dict.get("credentialSubject", {}),
+                issuance_date=cred_dict.get("issuanceDate"), # IMPORTANTE: usa "issuanceDate" come nel JSON originale
+                expiration_date=cred_dict.get("expirationDate")
+            )
+            # Assegna il campo proof all'oggetto appena creato
+            cred_for_verification.proof = cred_dict.get("proof", {})
+
+            print(f"DEBUG (main): Tentativo di verificare la firma per credenziale {cred_id}...")
+            if not cred_for_verification.verify_signature(issuer_public_key):
+                print(f"ERRORE (main): Firma NON valida per la credenziale '{cred_id}'. Credenziale SCARTATA.")
+                continue # Non aggiunge la credenziale al wallet e passa alla prossima
+
+            print(f"DEBUG (main): Firma VERIFICATA con successo per la credenziale '{cred_id}'. Procedo con la decifratura e aggiunta.")
+
+            # --- FINE VERIFICA DELLA FIRMA ---
+
 
             # Recupera la chiave Fernet cifrata e il soggetto cifrato
             encrypted_subject = cred_dict.get("credentialSubject", {}).get("encrypted_data")
@@ -495,16 +560,29 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
                         )
                     )
                     fernet_credential_obj = Fernet(decrypted_fernet_key_bytes)
-                    print(f"DEBUG (main): Chiave Fernet per credenziale '{cred_dict.get('id')}' decifrata con successo.")
+                    print(f"DEBUG (main): Chiave Fernet per credenziale '{cred_id}' decifrata con successo.")
 
                     # Decifra il soggetto della credenziale usando la chiave Fernet
                     decrypted_subject_bytes = fernet_credential_obj.decrypt(base64.urlsafe_b64decode(encrypted_subject))
                     decrypted_subject = json.loads(decrypted_subject_bytes.decode('utf-8'))
 
-                    # Aggiorna il dizionario con il soggetto decifrato (rimuovi la chiave cifrata qui per la presentazione)
-                    cred_dict["credentialSubject"] = decrypted_subject # Correggi il nome del campo in "credentialSubject"
+                    # Aggiorna il dizionario con il soggetto decifrato
+                    cred_dict["credentialSubject"] = decrypted_subject
+                    # Rimuovi la chiave Fernet cifrata e i dati cifrati dal dict per la pulizia del wallet
+                    # Dopo la decifratura, non servono più i campi cifrati nel wallet.
+                    # Ma assicurati di farlo solo se i campi esistono e sono all'interno del subject cifrato originale
+                    # Il campo `encrypted_data` viene rimpiazzato dal `decrypted_subject`
+                    # Il campo `encrypted_fernet_key` dovrebbe essere eliminato dal dict originale, non dal subject decifrato
                     if "encrypted_fernet_key" in cred_dict.get("credentialSubject", {}):
-                        del cred_dict["credentialSubject"]["encrypted_fernet_key"] # Rimuovi la chiave cifrata per la pulizia
+                        del cred_dict["credentialSubject"]["encrypted_fernet_key"] # NO, non qui, è nel livello superiore se presente
+
+                    # Questa parte è delicata: il `cred_dict` che stai modificando
+                    # è la copia locale della credenziale dal file.
+                    # Se i campi `encrypted_data` e `encrypted_fernet_key`
+                    # sono *dentro* `credentialSubject` nel JSON come nel tuo `Uni_credential.json`
+                    # allora la riga `cred_dict["credentialSubject"] = decrypted_subject`
+                    # li rimuove implicitamente.
+                    # Se fossero al livello superiore come `cred_dict["encrypted_data"]`, allora andrebbero rimossi esplicitamente.
 
                     is_duplicate = False
                     for existing_cred in student_wallet_obj.credentials:
@@ -515,14 +593,14 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
                     if not is_duplicate:
                         student_wallet_obj.add_credential(cred_dict)
                         new_credentials_added = True
-                        print(f"DEBUG (main): Credenziale '{cred_dict.get('id')}' decifrata e aggiunta al wallet dello studente.")
+                        print(f"DEBUG (main): Credenziale '{cred_id}' decifrata e aggiunta al wallet dello studente.")
                     else:
-                        print(f"DEBUG (main): Credenziale '{cred_dict.get('id')}' già presente nel wallet dello studente. Saltata.")
+                        print(f"DEBUG (main): Credenziale '{cred_id}' già presente nel wallet dello studente. Saltata.")
 
                 except Exception as e:
-                    print(f"ERRORE (main): Impossibile decifrare la credenziale '{cred_dict.get('id')}': {e}. Assicurati che la chiave Fernet sia stata cifrata correttamente con la chiave pubblica dello studente e che la chiave privata sia corretta.")
+                    print(f"ERRORE (main): Impossibile decifrare la credenziale '{cred_id}': {e}. Assicurati che la chiave Fernet sia stata cifrata correttamente con la chiave pubblica dello studente e che la chiave privata sia corretta.")
             else:
-                print(f"AVVISO (main): Credenziale '{cred_dict.get('id')}' senza dati cifrati o chiave Fernet cifrata.")
+                print(f"AVVISO (main): Credenziale '{cred_id}' senza dati cifrati o chiave Fernet cifrata. Saltata.")
         else:
             print(f"DEBUG (main): La matricola della credenziale ({cred_holder_id}) NON corrisponde alla matricola dello studente ({student_wallet_obj.student_matricola}). Saltata.")
 
@@ -642,6 +720,19 @@ while True:
             attributes_to_reveal = [attr.strip() for attr in attributes_to_reveal_str.split(",") if attr.strip()]
 
             try:
+                # Trova la credenziale originale completa nel wallet dello studente
+                original_credential_data = None
+                for cred_in_wallet in student_wallet.credentials:
+                    if cred_in_wallet.get('id') == credential_id:
+                        original_credential_data = cred_in_wallet
+                        print(f"Credenziale {original_credential_data.get('id')}.")
+                        print(json.dumps(original_credential_data, indent=2))
+                        break
+
+                if not original_credential_data:
+                    print(f"ERRORE: Credenziale con ID '{credential_id}' non trovata nel tuo wallet.")
+                    continue
+
                 selective_presentation = student_wallet.generate_selective_presentation(credential_id, attributes_to_reveal)
                 print("Presentazione selettiva generata:")
                 print(json.dumps(selective_presentation, indent=2))
@@ -654,29 +745,50 @@ while True:
                 # Create the directory if it doesn't exist
                 os.makedirs(output_directory, exist_ok=True) # Use exist_ok=True to avoid error if dir exists
 
-                issuer_id = selective_presentation.get("issuer").get("id")
+                # Il issuer_id per caricare la chiave pubblica deve essere l'issuer originale, non l'uni_id del ricevente
+                issuer_id_original = original_credential_data.get("issuer", {}).get("id")
+                issuer_email = None # Inizializza a None
                 try:
                     with open('users.json', "r") as f:
                         for line in f:
                             try:
                                 utente = json.loads(line)
-                                if utente.get("university_id") == issuer_id and utente.get("role") == "u":
+                                # Cerca l'emittente originale (università) per la sua email
+                                if utente.get("university_id") == issuer_id_original and utente.get("role") == "u":
                                     issuer_email = utente.get("email")
-                                    continue
+                                    break # Trovato, esci dal ciclo
                             except json.JSONDecodeError:
                                 print(f"Riga malformata nel file: {riga.strip()}")
                             except FileNotFoundError:
                                 print(f"File {path_file} non trovato.")
                 except Exception as e:
                     print(f"Errore durante la lettura del file: {e}")
+
+                if issuer_email is None:
+                    print(f"ERRORE: Impossibile trovare l'email dell'emittente originale con ID '{issuer_id_original}'.")
+                    continue
+
                 uni_public_key = load_public_key(issuer_email)
                 if uni_public_key is None:
-                    print(f"ERRORE: Impossibile caricare la chiave pubblica dell'università {uni_email}. Non posso cifrare la credenziale.")
+                    print(f"ERRORE: Impossibile caricare la chiave pubblica dell'università emittente {issuer_email}. Non posso verificare la firma.")
                     continue
-                cred = AcademicCredential(selective_presentation.get("original_credential_id") ,uni_id, selective_presentation.get("holder").get("id"), selective_presentation.get("credentialSubject"), selective_presentation.get("issuance_date"), selective_presentation.get("expirationDate"))
+
+                # Ricrea l'oggetto AcademicCredential con i DATI ORIGINALI per la verifica
+                cred = AcademicCredential(
+                    id=original_credential_data.get("id"),
+                    issuer_id=original_credential_data.get("issuer").get("id"), # USA L'ID DELL'EMITTENTE ORIGINALE
+                    holder_id=original_credential_data.get("holder").get("id"),
+                    credential_subject=original_credential_data.get("credentialSubject"), # USA IL SOGGETTO ORIGINALE COMPLETO
+                    issuance_date=original_credential_data.get("issuanceDate"),
+                    expiration_date=original_credential_data.get("expirationDate")
+                )
+                # Imposta il campo 'proof' dalla presentazione selettiva (che contiene il proof originale)
+                cred.proof = original_credential_data.get("proof")
+
                 if not cred.verify_signature(uni_public_key):
                     print(f"ERRORE, firma digitale non verificata per la credenziale selettiva {credential_id}.")
-                    break
+                    # Non fare break qui, l'errore è sulla verifica, non deve uscire dal menu dello studente.
+                    continue
 
                 print("DEBUG: Generazione e cifratura della chiave di sessione per il soggetto della credenziale...")
                 credential_fernet_key = Fernet.generate_key()
@@ -693,11 +805,9 @@ while True:
 
                 print("DEBUG: Chiave Fernet per soggetto credenziale generata e cifrata con RSA dello studente.")
                 selective_presentation["credentialSubject"]["encrypted_fernet_key"] = encrypted_fernet_key_for_subject
-                selective_presentation["credentialSubject"]["encrypted_data"] = base64.urlsafe_b64encode(fernet_credential_obj.encrypt(json.dumps(selective_presentation).encode())).decode('ascii')
+                selective_presentation["credentialSubject"]["encrypted_data"] = base64.urlsafe_b64encode(fernet_credential_obj.encrypt(json.dumps(selective_presentation["credentialSubject"]["encrypted_data"]).encode())).decode('ascii')
 
-                # Write/append the JSON data to the file
-                # To append valid JSON objects, you might want to read existing data, append, and rewrite
-                # Or, if each line should be a separate JSON object, just append with a newline
+
                 with open(filename, "a") as f: # Use "a" for append mode
                     json.dump(selective_presentation, f, indent=2)
                     f.write("\n") # Add a newline to separate JSON objects if appending multiple
@@ -831,7 +941,9 @@ while True:
             continue # O return se preferisci uscire dalla funzione al primo errore
 
         issued_credential.sign(uni_private_key, revocation_reference)
-
+        uni_public_key = load_public_key(current_email)
+        if issued_credential.verify_signature(uni_public_key):
+            print("Firma confermata, tutto OK")
         credentials_list = {"credentials": []}
         uni_credential_file_path = "FileFolder/Uni_credential.json"
         if os.path.exists(uni_credential_file_path):
