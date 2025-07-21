@@ -630,6 +630,7 @@ while True:
                         try:
                             utente = json.loads(line)
                             if utente.get("email") == uni_email and utente.get("role") == "u":
+                                uni_id = utente.get("id")
                                 continue
                         except json.JSONDecodeError:
                             print(f"Riga malformata nel file: {riga.strip()}")
@@ -637,7 +638,6 @@ while True:
                             print(f"File {path_file} non trovato.")
             except Exception as e:
                 print(f"Errore durante la lettura del file: {e}")
-
             attributes_to_reveal_str = input("Specifica gli attributi da rivelare scegliendo tra\ncourseName,grade,ectsCredits,issueSemester,courseCompleted,courseDescription(separati da virgola, es. courseName,grade,ectsCredits): ")
             attributes_to_reveal = [attr.strip() for attr in attributes_to_reveal_str.split(",") if attr.strip()]
 
@@ -654,10 +654,29 @@ while True:
                 # Create the directory if it doesn't exist
                 os.makedirs(output_directory, exist_ok=True) # Use exist_ok=True to avoid error if dir exists
 
-                uni_public_key = load_public_key(uni_email)
+                issuer_id = selective_presentation.get("issuer").get("id")
+                try:
+                    with open('users.json', "r") as f:
+                        for line in f:
+                            try:
+                                utente = json.loads(line)
+                                if utente.get("university_id") == issuer_id and utente.get("role") == "u":
+                                    issuer_email = utente.get("email")
+                                    continue
+                            except json.JSONDecodeError:
+                                print(f"Riga malformata nel file: {riga.strip()}")
+                            except FileNotFoundError:
+                                print(f"File {path_file} non trovato.")
+                except Exception as e:
+                    print(f"Errore durante la lettura del file: {e}")
+                uni_public_key = load_public_key(issuer_email)
                 if uni_public_key is None:
                     print(f"ERRORE: Impossibile caricare la chiave pubblica dell'università {uni_email}. Non posso cifrare la credenziale.")
                     continue
+                cred = AcademicCredential(selective_presentation.get("original_credential_id") ,uni_id, selective_presentation.get("holder").get("id"), selective_presentation.get("credentialSubject"), selective_presentation.get("issuance_date"), selective_presentation.get("expirationDate"))
+                if not cred.verify_signature(uni_public_key):
+                    print(f"ERRORE, firma digitale non verificata per la credenziale selettiva {credential_id}.")
+                    break
 
                 print("DEBUG: Generazione e cifratura della chiave di sessione per il soggetto della credenziale...")
                 credential_fernet_key = Fernet.generate_key()

@@ -206,5 +206,6 @@ class StudentWallet:
             "original_credential_id": credential_id,
             "proof": target_credential.get("proof"),
         }
+
         print(f"DEBUG (StudentWallet): Presentazione selettiva generata per {credential_id}.")
         return selective_presentation
