@@ -654,7 +654,6 @@ while True:
                 # Create the directory if it doesn't exist
                 os.makedirs(output_directory, exist_ok=True) # Use exist_ok=True to avoid error if dir exists
 
-
                 issuer_id = selective_presentation.get("issuer").get("id")
                 try:
                     with open('users.json', "r") as f:
@@ -674,7 +673,20 @@ while True:
                 if uni_public_key is None:
                     print(f"ERRORE: Impossibile caricare la chiave pubblica dell'università {uni_email}. Non posso cifrare la credenziale.")
                     continue
-                cred = AcademicCredential(selective_presentation.get("original_credential_id") ,uni_id, selective_presentation.get("holder").get("id"), selective_presentation.get("credentialSubject"), selective_presentation.get("issuance_date"), selective_presentation.get("expirationDate"))
+
+                # Crea l'oggetto AcademicCredential
+                cred = AcademicCredential(
+                    selective_presentation.get("original_credential_id"),
+                    issuer_id,
+                    selective_presentation.get("holder").get("id"),
+                    selective_presentation.get("credentialSubject"),
+                    selective_presentation.get("issuance_date"),
+                    selective_presentation.get("expirationDate")
+                )
+
+                # AGGIUNGI QUESTA RIGA: Imposta il campo 'proof' dalla presentazione selettiva
+                cred.proof = selective_presentation.get("proof", {})
+
                 if not cred.verify_signature(uni_public_key):
                     print(f"ERRORE, firma digitale non verificata per la credenziale selettiva {credential_id}.")
                     break
