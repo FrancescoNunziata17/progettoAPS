@@ -4,6 +4,7 @@ import base64
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
+from datetime import datetime
 
 # Assicurati che queste funzioni siano correttamente accessibili
 from credential import load_private_key, load_public_key
@@ -177,7 +178,8 @@ class StudentWallet:
         if not target_credential:
             raise ValueError(f"Credenziale con ID '{credential_id}' non trovata nel wallet.")
 
-        original_subject = target_credential.get('credential_subject', {})
+        original_subject = target_credential.get('credentialSubject', {})
+        print(f"DEBUG (StudentWallet): Soggetto della credenziale {credential_id}: {original_subject}")
         if not isinstance(original_subject, dict):
             raise ValueError("Il soggetto della credenziale non è un dizionario valido.")
 
@@ -192,12 +194,16 @@ class StudentWallet:
         selective_presentation = {
             "id": f"presentation:{credential_id}",
             "type": ["VerifiablePresentation", "SelectiveDisclosure"],
-            "holder": target_credential.get("holder"),
-            "issuer": target_credential.get("issuer_id"),
+            "issuer": target_credential.get("issuer"),
             "issuance_date": datetime.now().isoformat(),
-            "credential_subject_revealed": revealed_attributes,
+            "expirationDate" : target_credential.get("expirationDate"),
+            "holder": target_credential.get("holder"),
+            "credentialSubject": {
+                "encrypted_data" : revealed_attributes,
+                "encrypted_fernet_key" : None,
+            },
             "original_credential_id": credential_id,
-            "signature": target_credential.get("signature") # Includi la firma originale dell'emittente
+            "proof": target_credential.get("proof"),
         }
         print(f"DEBUG (StudentWallet): Presentazione selettiva generata per {credential_id}.")
         return selective_presentation

@@ -492,7 +492,6 @@ def retrieve_and_add_credentials_to_wallet(student_wallet_obj, student_email, st
 ### Main del Programma
 
 print("--- Benvenuto nel Sistema ---")
-
 # Scelta iniziale del ruolo
 while True:
     role_choice = input("Sei un'Università (u) o uno Studente (s)? ").lower()
@@ -577,13 +576,69 @@ while True:
         if student_wallet:
             print("\n--- Presentazione Credenziale Selettiva ---")
             credential_id = input("Inserisci l'ID della credenziale da presentare: ")
-            attributes_to_reveal_str = input("Specifica gli attributi da rivelare (separati da virgola, es. courseName,grade): ")
+            if blockchain_register.is_revoked(credential_id):
+                print("Credenziale revocata, non è possibile fare la presentazione selettiva")
+            uni_email = input("Inserisci l'email dell'università a cui va presentata la credenziale: ")
+            try:
+                with open('users.json', "r") as f:
+                    for line in f:
+                        try:
+                            utente = json.loads(line)
+                            if utente.get("email") == uni_email and utente.get("role") == "u":
+                                continue
+                        except json.JSONDecodeError:
+                            print(f"Riga malformata nel file: {riga.strip()}")
+                        except FileNotFoundError:
+                            print(f"File {path_file} non trovato.")
+            except Exception as e:
+                print(f"Errore durante la lettura del file: {e}")
+
+            attributes_to_reveal_str = input("Specifica gli attributi da rivelare scegliendo tra\ncourseName,grade,ectsCredits,issueSemester,courseCompleted,courseDescription(separati da virgola, es. courseName,grade,ectsCredits): ")
             attributes_to_reveal = [attr.strip() for attr in attributes_to_reveal_str.split(",") if attr.strip()]
 
             try:
                 selective_presentation = student_wallet.generate_selective_presentation(credential_id, attributes_to_reveal)
                 print("Presentazione selettiva generata:")
                 print(json.dumps(selective_presentation, indent=2))
+                last_colon_index = credential_id.rfind(':')
+                result_sequence= credential_id[last_colon_index + 1:]
+
+                output_directory = os.path.join(os.getcwd(), uni_email + "_selective_cred")
+                filename = os.path.join(output_directory, f"presentazione_{result_sequence}.json")
+
+                # Create the directory if it doesn't exist
+                os.makedirs(output_directory, exist_ok=True) # Use exist_ok=True to avoid error if dir exists
+
+                uni_public_key = load_public_key(uni_email)
+                if uni_public_key is None:
+                    print(f"ERRORE: Impossibile caricare la chiave pubblica dell'università {uni_email}. Non posso cifrare la credenziale.")
+                    continue
+
+                print("DEBUG: Generazione e cifratura della chiave di sessione per il soggetto della credenziale...")
+                credential_fernet_key = Fernet.generate_key()
+                fernet_credential_obj = Fernet(credential_fernet_key)
+
+                encrypted_fernet_key_for_subject = uni_public_key.encrypt(
+                    credential_fernet_key,
+                    padding.OAEP(
+                        mgf=padding.MGF1(hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None
+                    )
+                ).hex() # Converti in esadecimale
+
+                print("DEBUG: Chiave Fernet per soggetto credenziale generata e cifrata con RSA dello studente.")
+                selective_presentation["credentialSubject"]["encrypted_fernet_key"] = encrypted_fernet_key_for_subject
+                selective_presentation["credentialSubject"]["encrypted_data"] = base64.urlsafe_b64encode(fernet_credential_obj.encrypt(json.dumps(selective_presentation).encode())).decode('ascii')
+
+                # Write/append the JSON data to the file
+                # To append valid JSON objects, you might want to read existing data, append, and rewrite
+                # Or, if each line should be a separate JSON object, just append with a newline
+                with open(filename, "a") as f: # Use "a" for append mode
+                    json.dump(selective_presentation, f, indent=2)
+                    f.write("\n") # Add a newline to separate JSON objects if appending multiple
+                print(f"Presentazione selettiva salvata su file: {filename}")
+
             except ValueError as ve:
                 print(f"ERRORE: {ve}")
             except Exception as e:
